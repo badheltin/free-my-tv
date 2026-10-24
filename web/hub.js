@@ -42,14 +42,23 @@
   var WANTED = (CONFIG.shelfApps || []).map(function (s) { return s.toLowerCase(); });
   var HIDE = (CONFIG.hideApps || []).map(function (s) { return s.toLowerCase(); });
 
-  // The bundled logos (white or colored, on a clear background) go on the brand's color.
+  // The streaming apps' own logos, on their brand color, as on Samsung's apps bar: [match, logo, color, logo size].
   var BRAND = [
-    [/netflix/i, '#000000'], [/prime|amazon/i, '#00A8E1'], [/youtube/i, '#0F0F0F'], [/max|hbo/i, '#3A1C9C'],
-    [/spotify/i, '#121212'], [/disney/i, '#0E1A4F'], [/tv ?plus/i, '#1F4BD8'], [/globoplay/i, '#FF5A1F']
+    [/netflix/i, 'icons/netflix.svg', '#000000', 'h58'],
+    [/prime|amazon/i, 'icons/prime.png', '#1A98FF', 'w66'],
+    [/youtube kids/i, 'icons/youtubekids.svg', '#FF0033', 'w62'],
+    [/youtube/i, 'icons/youtube.png', '#0F0F0F', 'w66'],
+    [/hbo|^max$/i, 'icons/hbomax.svg', '#5A2BD6', 'h72'],
+    [/spotify/i, 'icons/spotify-green.svg', '#000000', 'h52'],
+    [/disney/i, 'icons/disneyplus.svg', '#0B1E5B', 'w56'],
+    [/tv ?plus/i, 'icons/tvplus.svg', '#101828', 'h62'],
+    [/apple ?tv/i, 'icons/appletv.svg', '#000000', 'h58'],
+    [/globoplay/i, '', '#FF4A1C', ''],
+    [/deezer/i, 'icons/deezer.svg', '#000000', 'w60']
   ];
-  function brand(app) {
-    for (var i = 0; i < BRAND.length; i++) if (BRAND[i][0].test(app.title) || BRAND[i][0].test(app.id)) return BRAND[i][1];
-    return app.color || '#262A33';
+  function brandOf(app) {
+    for (var i = 0; i < BRAND.length; i++) if (BRAND[i][0].test(app.title) || BRAND[i][0].test(app.id)) return BRAND[i];
+    return null;
   }
 
   var apps = [], bar = [];
@@ -69,16 +78,22 @@
     bar = out;
   }
 
+  /** An app's face: its brand logo on its color, else the TV's own icon, else its name. */
+  function face(app, t) {
+    var b = brandOf(app);
+    t.style.backgroundColor = b ? b[2] : app.color || '#262A33';
+    var word = el('div', 'word', t, app.title);
+    var src = b && b[1] ? b[1] : app.icon && app.icon.indexOf('icons/') !== 0 ? app.icon : '';
+    if (!src) return;
+    var art = el('div', 'art' + (b && b[1] ? ' logo ' + b[3] : ''), t);
+    var img = new Image();
+    img.onload = function () { art.style.backgroundImage = 'url("' + src + '")'; word.style.display = 'none'; };
+    img.src = src;
+  }
+
   function appTile(app, parent) {
     var t = el('div', 'app', parent);
-    t.style.background = brand(app);
-    var word = el('div', 'word', t, app.title);
-    if (app.icon) {
-      var art = el('div', 'art' + (app.icon.indexOf('icons/') === 0 ? ' logo' : ''), t);
-      var img = new Image();
-      img.onload = function () { art.style.backgroundImage = 'url("' + app.icon + '")'; word.style.display = 'none'; };
-      img.src = app.icon;
-    }
+    face(app, t);
     el('div', 'name', t, app.title);
     return t;
   }
@@ -95,7 +110,7 @@
   // Each row: its cards (DOM), what OK does with each, and how far down #main slides when it has the focus.
   var rows = [];
   var st = {rail: false, railAt: 0, row: 1, col: [0, 0, 0, 0], all: false, allAt: 0};
-  var SLIDE = [0, 0, 200, 430];
+  var SLIDE = [0, 0, 230, 560];
 
   function layStrip(strip, nodes, gap) {
     var x = 0;
@@ -118,7 +133,7 @@
         items.push({node: appTile(app, strip), ok: function () { launch(app.id); }});
       })(bar[i]);
     }
-    layStrip(strip, items.map(function (x) { return x.node; }), 18);
+    layStrip(strip, items.map(function (x) { return x.node; }), 10);
     rows[1] = items;
   }
 
@@ -130,28 +145,51 @@
     var screen = el('div', 'screen', strip);
     var art = el('div', 'art', screen);
     sym('live_tv', art);
-    el('div', 'badge', screen, 'AO VIVO');
-    el('div', 'name', screen, 'Canal atual');
+    el('div', 'badge', screen, 'Ao vivo');
+    el('div', 'caption', screen, 'TV aberta');
     items.push({node: screen, ok: function () { launch('source:TV:1'); }});
+    var shown = {};
+    for (var r = 0; r < recent.length; r++) {
+      var app = null, src = null;
+      for (var a = 0; a < apps.length; a++) if (apps[a].id === recent[r].id) app = apps[a];
+      for (var b = 0; b < sources.length; b++) if (sources[b].id === recent[r].id) src = sources[b];
+      if (!app && !src) continue;
+      shown[recent[r].id] = true;
+      (function (it, at) {
+        var c = el('div', 'recent', strip);
+        var art = el('div', 'face', c);
+        if (it.title) face(it, art);
+        else { art.style.backgroundColor = '#1A1E27'; sym(it.symbol || 'hdmi', art); }
+        el('div', 'caption', c, it.title || it.label || it.key);
+        el('div', 'when', c, ago(at));
+        items.push({node: c, ok: function () { launch(it.id); }});
+      })(app || src, recent[r].at);
+    }
     for (var i = 0; i < sources.length; i++) {
+      if (shown[sources[i].id]) continue;
       var s = sources[i];
       if (s.key === 'live' || !s.connected) continue;
       (function (src) {
         var c = el('div', 'source', strip);
-        sym(src.symbol || 'hdmi', c);
-        el('div', 'word', c, src.label || src.key);
+        sym(src.symbol || 'hdmi', el('div', 'ring', c));
+        el('div', 'caption', c, src.label || src.key);
         items.push({node: c, ok: function () { launch(src.id); }});
       })(s);
     }
     var tvPlus = null;
     for (var j = 0; j < apps.length; j++) if (/tv ?plus/i.test(apps[j].title)) tvPlus = apps[j];
-    if (tvPlus) {
+    if (tvPlus && !shown[tvPlus.id]) {
       var p = el('div', 'source', strip);
-      sym('tv', p);
-      el('div', 'word', p, 'TV grátis');
+      var pr = el('div', 'ring', p);
+      pr.style.backgroundColor = '#101828';
+      pr.style.backgroundImage = 'url("icons/tvplus.svg")';
+      pr.style.backgroundSize = 'auto 46%';
+      pr.style.backgroundPosition = 'center';
+      pr.style.backgroundRepeat = 'no-repeat';
+      el('div', 'caption', p, 'TV grátis');
       items.push({node: p, ok: function () { launch(tvPlus.id); }});
     }
-    layStrip(strip, items.map(function (x) { return x.node; }), 24);
+    layStrip(strip, items.map(function (x) { return x.node; }), 20);
     rows[2] = items;
     placeLive();
   }
@@ -174,37 +212,60 @@
     return function (tag) { var n = it.getElementsByTagName(tag)[0]; return n ? n.textContent : ''; };
   }
 
-  function parseNews(xml) {
+  /** An RSS feed's stories: Google News (the source in <source>, no photo) or G1 (a photo in media:content). */
+  function parseNews(xml, fallbackSource) {
     var doc = new DOMParser().parseFromString(xml, 'text/xml');
     var items = doc.getElementsByTagName('item'), out = [];
-    for (var i = 0; i < items.length && out.length < 12; i++) {
+    for (var i = 0; i < items.length && out.length < 20; i++) {
       var it = items[i];
       var text = tagText(it);
-      var source = text('source'), title = text('title');
+      var source = text('source') || fallbackSource, title = text('title').replace(/^\s+|\s+$/g, '');
       if (source && title.slice(-source.length - 3) === ' - ' + source) title = title.slice(0, -source.length - 3);
-      out.push({title: title, source: source, link: text('link'), at: Date.parse(text('pubDate')) || 0});
+      if (/ao vivo: assista/i.test(title)) continue;
+      var media = it.getElementsByTagName('media:content')[0];
+      out.push({title: title, source: source, link: text('link'), at: Date.parse(text('pubDate')) || 0,
+        photo: media ? media.getAttribute('url') : ''});
     }
-    out.sort(function (a, b) { return b.at - a.at; });
     return out;
   }
 
+  // The city's own news (Google News) and the region's TV news with photos (G1 Triângulo e Alto Paranaíba).
+  var FEEDS = [
+    {url: 'https://news.google.com/rss/search?q=' + encodeURIComponent(NEWS_QUERY) + '&hl=pt-BR&gl=BR&ceid=BR:pt-419',
+      sample: 'news-sample.xml', source: ''},
+    {url: 'https://g1.globo.com/rss/g1/mg/triangulo-mineiro/', sample: 'g1-sample.xml', source: 'g1 Triângulo e Alto Paranaíba'}
+  ];
+
+  function key(title) { return title.toLowerCase().replace(/[^a-z0-9à-ú]+/g, ' ').slice(0, 48); }
+
   function fetchNews() {
     if (!NEWS_QUERY) return;
-    var url = TV.name === 'browser' ? 'news-sample.xml'
-      : 'https://news.google.com/rss/search?q=' + encodeURIComponent(NEWS_QUERY) + '&hl=pt-BR&gl=BR&ceid=BR:pt-419';
-    var x = new XMLHttpRequest();
-    x.open('GET', url);
-    x.timeout = 15000;
-    x.onload = function () {
-      if (x.status !== 200) return;
-      var list = parseNews(x.responseText);
-      if (!list.length) return;
-      news = list;
-      try { localStorage.setItem(NEWS_KEY, JSON.stringify(news)); } catch (e) {}
-      renderNews();
-      showStory(0);
-    };
-    x.send();
+    var got = [], left = FEEDS.length;
+    FEEDS.forEach(function (f) {
+      var x = new XMLHttpRequest();
+      x.open('GET', TV.name === 'browser' ? f.sample : f.url);
+      x.timeout = 15000;
+      function done() {
+        if (x.status === 200) got = got.concat(parseNews(x.responseText, f.source));
+        if (--left) return;
+        var seen = {}, list = [];
+        got.sort(function (a, b) { return b.at - a.at; });
+        for (var i = 0; i < got.length && list.length < 16; i++) {
+          var k = key(got[i].title);
+          if (seen[k]) continue;
+          seen[k] = true;
+          list.push(got[i]);
+        }
+        if (!list.length) return;
+        news = list;
+        try { localStorage.setItem(NEWS_KEY, JSON.stringify(news)); } catch (e) {}
+        renderNews();
+        showStory(0);
+      }
+      x.onload = done;
+      x.onerror = x.ontimeout = function () { x = {status: 0}; done(); };
+      x.send();
+    });
   }
 
   function openLink(url) {
@@ -225,15 +286,15 @@
     var items = [];
     for (var i = 0; i < news.length; i++) {
       (function (n) {
-        var c = el('div', 'story-card', strip);
-        el('div', 'from', c, n.source);
+        var c = el('div', 'story-card' + (n.photo ? '' : ' text'), strip);
+        if (n.photo) el('div', 'pic', c).style.backgroundImage = 'url("' + n.photo + '")';
+        el('div', 'from', c, n.source + (n.at ? '  ' + ago(n.at) : ''));
         el('div', 'headline', c, n.title);
-        el('div', 'when', c, n.at ? ago(n.at) : '');
         items.push({node: c, ok: function () { openLink(n.link); }});
       })(news[i]);
     }
     if (!items.length) el('div', 'empty', part, 'As notícias aparecem aqui assim que a TV se conectar à internet.');
-    layStrip(strip, items.map(function (x) { return x.node; }), 24);
+    layStrip(strip, items.map(function (x) { return x.node; }), 20);
     rows[3] = items;
     if (st.row === 3 && !items.length) st.row = 2;
     focus();
@@ -244,12 +305,19 @@
   var storyAt = 0, storyTimer = null;
   var hero = $('hero');
 
+  function heroStories() {
+    var local = new RegExp(NEWS_QUERY.slice(0, 5), 'i');
+    var withPhoto = news.filter(function (n) { return n.photo; });
+    withPhoto.sort(function (a, b) { return (local.test(b.title) ? 1 : 0) - (local.test(a.title) ? 1 : 0); });
+    return (withPhoto.length >= 3 ? withPhoto : news).slice(0, 5);
+  }
+
   function showStory(i) {
-    var count = Math.min(5, news.length);
+    var list = heroStories(), count = list.length;
     var box = hero.querySelector('.story'), dots = hero.querySelector('.dots');
     if (!count) {
       box.querySelector('.kicker').textContent = Place.city || '';
-      box.querySelector('.headline').textContent = 'Sua TV, sem anúncios.';
+      box.querySelector('.headline').textContent = 'Bem-vindo';
       box.querySelector('.when').textContent = '';
       dots.innerHTML = '';
       return;
@@ -257,10 +325,13 @@
     storyAt = (i + count) % count;
     setClass(box, 'out', true);
     setTimeout(function () {
-      var n = news[storyAt];
-      box.querySelector('.kicker').textContent = 'Notícias de ' + (Place.city || 'sua região') + '  ·  ' + n.source;
+      var n = list[storyAt];
+      box.querySelector('.kicker').textContent = n.source;
       box.querySelector('.headline').textContent = n.title;
       box.querySelector('.when').textContent = n.at ? ago(n.at) : '';
+      var photo = hero.querySelector('.photo');
+      photo.style.backgroundImage = n.photo ? 'url("' + n.photo + '")' : '';
+      setClass(hero, 'has-photo', !!n.photo);
       dots.innerHTML = '';
       for (var d = 0; d < count; d++) el('span', 'dot' + (d === storyAt ? ' on' : ''), dots);
       setClass(box, 'out', false);
@@ -271,14 +342,14 @@
 
   function renderWeather() {
     var w = Data.weather, box = hero.querySelector('.weather');
-    box.querySelector('.clock').textContent = formatDate('format|EEEE, d MMM', Date.now()) + '   ' + formatDate('format|h:mm', Date.now());
+    box.querySelector('.clock').textContent = formatDate('format|h:mm', Date.now()) + '   ' + formatDate('format|EEE, d MMM', Date.now());
     var temp = box.querySelector('.temp');
     temp.innerHTML = '';
     if (!w) { box.querySelector('.cond').textContent = Place.city || ''; return; }
     sym(Data.symbol(w.code, w.isDay), temp);
     el('span', '', temp, Data.degrees(w.temp));
-    box.querySelector('.cond').textContent = (Place.city ? Place.city + '  ·  ' : '') + Data.condition(w.code, w.isDay);
-    box.querySelector('.range').textContent = 'Máx. ' + Data.degrees(w.max) + '   Mín. ' + Data.degrees(w.min);
+    box.querySelector('.cond').textContent = Place.city + ', ' + Data.condition(w.code, w.isDay).toLowerCase();
+    box.querySelector('.range').textContent = Data.degrees(w.max) + ' / ' + Data.degrees(w.min);
   }
 
   // MARK: - Live picture
@@ -291,13 +362,13 @@
     var hole = $('hole');
     if (!card) return;
     var strip = card.parentNode;
-    var x = 104 + 80 + card.offsetLeft + stripShift(strip);
-    var y = 660 + 52 - SLIDE[st.row];
-    hole.style.left = (x - 104) + 'px';
+    var x = 96 + 72 + card.offsetLeft + stripShift(strip);
+    var y = 664 + 44 - SLIDE[st.row];
+    hole.style.left = (x - 96) + 'px';
     hole.style.top = (y + SLIDE[st.row]) + 'px';
-    hole.style.width = '480px';
-    hole.style.height = '270px';
-    var visible = !document.hidden && !st.all && y > -100 && y + 270 < 1180;
+    hole.style.width = '400px';
+    hole.style.height = '225px';
+    var visible = !document.hidden && !st.all && y > -100 && y + 225 < 1180;
     if (!window.tizen || !window.tizen.tvwindow) return;
     try {
       if (!visible) {
@@ -306,7 +377,7 @@
         setClass(body, 'playing', false);
         return;
       }
-      var r = [Math.round(x * scale) + 'px', Math.round(y * scale) + 'px', Math.round(480 * scale) + 'px', Math.round(270 * scale) + 'px'];
+      var r = [Math.round(x * scale) + 'px', Math.round(y * scale) + 'px', Math.round(400 * scale) + 'px', Math.round(225 * scale) + 'px'];
       window.tizen.tvwindow.show(function () { liveShown = true; setClass(body, 'playing', true); },
         function () { setClass(body, 'playing', false); }, r, 'MAIN');
     } catch (e) {
@@ -392,7 +463,7 @@
   function activate() {
     if (st.all) { var a = allApps[st.allAt]; if (a) launch(a.id); return; }
     if (st.rail) { RAIL[st.railAt].ok(); focus(); return; }
-    if (st.row === 0) { if (news[storyAt]) openLink(news[storyAt].link); return; }
+    if (st.row === 0) { var h = heroStories()[storyAt]; if (h) openLink(h.link); return; }
     var it = rows[st.row][st.col[st.row]];
     if (it) it.ok();
   }
@@ -403,7 +474,21 @@
   }
 
   function launch(id) {
+    remember(id);
     TV.launch(id, null, function (ok) { if (!ok) toast('Não deu para abrir'); });
+  }
+
+  // MARK: - Recently watched: what was opened from here, newest first
+
+  var RECENT_KEY = 'fmtv.recent', recent = [];
+  try { recent = JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch (e) {}
+
+  function remember(id) {
+    if (id === 'source:TV:1') return;
+    recent = recent.filter(function (r) { return r.id !== id; });
+    recent.unshift({id: id, at: Date.now()});
+    recent = recent.slice(0, 10);
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); } catch (e) {}
   }
 
   // MARK: - All apps
