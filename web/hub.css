@@ -1,0 +1,227 @@
+/*
+ * Smart Hub: Samsung's home layout without the ads. A black rail on the left, a banner on top (local news and the
+ * weather where Samsung sells a slot), then rows: the apps bar, live TV with its picture, and the region's news.
+ * The live picture is the TV's own video plane (tizen.tvwindow) under the page: #hole leaves it uncovered.
+ */
+@font-face {
+  font-family: 'Inter';
+  src: url('fonts/InterVariable.ttf') format('truetype');
+  font-weight: 100 900;
+}
+
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0A0C10; }
+body.tv { background: transparent; }
+body {
+  font-family: 'SamsungOne', 'SamsungOneUI', 'TizenSans', 'Inter', Arial, sans-serif;
+  color: #FFF;
+  -webkit-font-smoothing: antialiased;
+  cursor: default;
+}
+
+#stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; -webkit-transform-origin: 0 0; transform-origin: 0 0; }
+
+.sym {
+  display: inline-block;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  background-color: currentColor;
+}
+
+/* MARK: - Rail */
+
+#rail { position: absolute; left: 0; top: 0; width: 104px; height: 1080px; background: #000; z-index: 3; }
+#rail .item {
+  position: absolute;
+  left: 22px;
+  width: 60px;
+  height: 60px;
+  border-radius: 30px;
+  color: #8D929B;
+  -webkit-transition: background-color 0.15s, color 0.15s;
+  transition: background-color 0.15s, color 0.15s;
+}
+#rail .item .sym { position: absolute; left: 16px; top: 16px; width: 28px; height: 28px; }
+#rail .item.here { color: #FFF; }
+#rail .item.here::after { content: ''; position: absolute; left: -22px; top: 14px; width: 4px; height: 32px; border-radius: 2px; background: #1C6EF2; }
+#rail .item.focus { background: #FFF; color: #000; }
+#rail .tip {
+  position: absolute;
+  left: 76px;
+  top: 14px;
+  font-size: 22px;
+  font-weight: 600;
+  color: #FFF;
+  white-space: nowrap;
+  opacity: 0;
+  -webkit-transition: opacity 0.15s;
+  transition: opacity 0.15s;
+}
+#rail .item.focus .tip { opacity: 1; }
+
+/* MARK: - Main: the part that scrolls */
+
+#main {
+  position: absolute;
+  left: 104px;
+  top: 0;
+  width: 1816px;
+  height: 2000px;
+  -webkit-transition: -webkit-transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+#hole { position: absolute; z-index: 0; box-shadow: 0 0 0 4000px #0A0C10; }
+#main > .part { position: absolute; left: 0; z-index: 1; }
+
+/* MARK: - Banner */
+
+#hero { top: 0; width: 1816px; height: 440px; overflow: hidden; background: #10141D; }
+#hero .glow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: -webkit-linear-gradient(-20deg, #13224A 0%, #0F1524 48%, #0B0E15 100%);
+  background: linear-gradient(110deg, #13224A 0%, #0F1524 48%, #0B0E15 100%);
+}
+#hero .story {
+  position: absolute;
+  left: 80px;
+  top: 92px;
+  width: 1060px;
+  -webkit-transition: opacity 0.4s;
+  transition: opacity 0.4s;
+}
+#hero .story.out { opacity: 0; }
+#hero .kicker { font-size: 24px; font-weight: 600; color: #7FA8FF; }
+#hero .headline {
+  margin-top: 18px;
+  font-size: 54px;
+  font-weight: 700;
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+  max-height: 186px;
+  overflow: hidden;
+}
+#hero .when { margin-top: 20px; font-size: 22px; color: #9AA0AA; }
+#hero .dots { position: absolute; left: 80px; top: 376px; height: 6px; }
+#hero .dot { display: inline-block; width: 28px; height: 6px; margin-right: 8px; border-radius: 3px; background: rgba(255, 255, 255, 0.22); }
+#hero .dot.on { background: #FFF; }
+#hero.focus { box-shadow: inset 0 0 0 4px #FFF; }
+
+#hero .weather { position: absolute; right: 80px; top: 92px; width: 440px; text-align: right; }
+#hero .clock { font-size: 30px; font-weight: 600; }
+#hero .temp { margin-top: 26px; font-size: 120px; font-weight: 300; line-height: 1; letter-spacing: -0.03em; }
+#hero .temp .sym { width: 76px; height: 76px; margin-right: 18px; vertical-align: 6px; color: #FFD54F; }
+#hero .cond { margin-top: 14px; font-size: 26px; font-weight: 600; }
+#hero .range { margin-top: 8px; font-size: 22px; color: #9AA0AA; }
+
+/* MARK: - Rows */
+
+.part .title { position: absolute; left: 80px; top: 0; font-size: 28px; font-weight: 700; white-space: nowrap; }
+.strip {
+  position: absolute;
+  left: 80px;
+  -webkit-transition: -webkit-transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.strip > div {
+  position: absolute;
+  top: 0;
+  border-radius: 12px;
+  -webkit-transition: -webkit-transform 0.16s ease-out, box-shadow 0.16s;
+  transition: transform 0.16s ease-out, box-shadow 0.16s;
+}
+.strip > div.focus { -webkit-transform: scale(1.08); transform: scale(1.08); box-shadow: 0 0 0 4px #FFF, 0 18px 40px rgba(0, 0, 0, 0.7); z-index: 2; }
+.strip .name {
+  position: absolute;
+  left: -30px;
+  right: -30px;
+  top: 100%;
+  margin-top: 14px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+}
+.strip > div.focus .name { opacity: 1; }
+
+/* The apps bar: each app on its own tile, the TV's icon where it has one. */
+#apps { top: 476px; width: 1816px; height: 160px; }
+#apps .strip { top: 0; }
+.app { width: 176px; height: 110px; background: #262A33; overflow: visible; }
+.app .art { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 12px; background-size: cover; background-position: center; }
+.app .art.logo { background-size: 62% 46%; background-repeat: no-repeat; }
+.app .word { position: absolute; left: 8px; right: 8px; top: 38px; text-align: center; font-size: 24px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app.tool { background: #1E222B; }
+.app.tool .sym { position: absolute; left: 72px; top: 22px; width: 32px; height: 32px; }
+.app.tool .word { top: 64px; font-size: 20px; font-weight: 600; color: #D7DAE0; }
+
+/* Live TV: the antenna's picture in the first card, then the HDMI devices that are on. */
+#live { top: 660px; width: 1816px; height: 340px; }
+#live .strip { top: 52px; }
+.screen { width: 480px; height: 270px; overflow: visible; }
+.screen .art {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  background: -webkit-linear-gradient(-30deg, #1B2A55, #0D1222);
+  background: linear-gradient(120deg, #1B2A55, #0D1222);
+}
+.screen .art .sym { position: absolute; left: 208px; top: 103px; width: 64px; height: 64px; color: rgba(255, 255, 255, 0.5); }
+.playing .screen .art { background: transparent; }
+.playing .screen .art .sym { display: none; }
+.screen .badge { position: absolute; left: 16px; top: 16px; padding: 4px 12px; border-radius: 6px; background: #E5202E; font-size: 18px; font-weight: 700; }
+.source { width: 270px; height: 270px; background: #1A1E27; overflow: visible; }
+.source .sym { position: absolute; left: 103px; top: 82px; width: 64px; height: 64px; color: #D7DAE0; }
+.source .word { position: absolute; left: 0; right: 0; top: 172px; text-align: center; font-size: 24px; font-weight: 600; }
+
+/* News: headline cards, newest first. */
+#news { top: 1040px; width: 1816px; height: 360px; }
+#news .strip { top: 52px; }
+.story-card { width: 440px; height: 220px; background: #1A1E27; overflow: hidden; }
+.story-card .from { position: absolute; left: 24px; top: 22px; right: 24px; width: auto; height: auto; background: none; font-size: 19px; font-weight: 600; color: #7FA8FF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.story-card .headline { position: absolute; left: 24px; right: 24px; top: 58px; font-size: 25px; font-weight: 600; line-height: 1.28; max-height: 128px; overflow: hidden; }
+.story-card .when { position: absolute; left: 24px; bottom: 18px; font-size: 18px; color: #9AA0AA; }
+.empty { position: absolute; left: 80px; top: 52px; font-size: 24px; color: #9AA0AA; }
+
+/* MARK: - All apps */
+
+#all {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  z-index: 4;
+  background: #0A0C10;
+  opacity: 0;
+  visibility: hidden;
+  -webkit-transition: opacity 0.2s, visibility 0s 0.2s;
+  transition: opacity 0.2s, visibility 0s 0.2s;
+}
+#all.open { opacity: 1; visibility: visible; -webkit-transition: opacity 0.2s; transition: opacity 0.2s; }
+#all h2 { position: absolute; left: 184px; top: 64px; margin: 0; font-size: 44px; font-weight: 700; }
+#all .grid { position: absolute; left: 184px; top: 170px; -webkit-transition: -webkit-transform 0.26s; transition: transform 0.26s; }
+#all .grid > div { position: absolute; }
+
+#toast {
+  position: absolute;
+  left: 50%;
+  bottom: 60px;
+  width: 800px;
+  margin-left: -400px;
+  text-align: center;
+  font-size: 24px;
+  z-index: 5;
+  opacity: 0;
+  -webkit-transition: opacity 0.2s;
+  transition: opacity 0.2s;
+}
+#toast span { display: inline-block; padding: 14px 28px; border-radius: 28px; background: #FFF; color: #000; font-weight: 600; }
+#toast.on { opacity: 1; }
