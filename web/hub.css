@@ -11,7 +11,6 @@
 }
 
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0D0E11; }
-body.tv { background: transparent; }
 body {
   font-family: 'SamsungOne', 'SamsungOneUI', 'TizenSans', 'Inter', Arial, sans-serif;
   color: #FFF;
@@ -48,22 +47,15 @@ body {
 }
 #rail .item.focus .tip { opacity: 1; }
 
-/* MARK: - Main: the part that scrolls */
+/* MARK: - Main: the part that scrolls when a list below has the focus */
 
-#main {
-  position: absolute;
-  left: 96px;
-  top: 0;
-  width: 1824px;
-  height: 2000px;
-}
-#hole { position: absolute; z-index: 0; box-shadow: 0 0 0 4000px #0D0E11; border-radius: 6px; }
-#main > .part { position: absolute; left: 0; z-index: 1; }
+#main { position: absolute; left: 96px; top: 0; width: 1824px; height: 2400px; }
+#main > .part { position: absolute; left: 0; }
 
 /* MARK: - Banner: the city's weather over a photo of it, where Samsung sells a slot */
 
-#hero { top: 0; width: 1824px; height: 460px; overflow: hidden; background: #15171C; }
-#hero .photo { position: absolute; right: 0; top: 0; width: 1180px; height: 460px; background: url('icons/araxa.jpg') center 40% / cover no-repeat; }
+#hero { top: 0; width: 1824px; height: 420px; overflow: hidden; background: #15171C; }
+#hero .photo { position: absolute; right: 0; top: 0; width: 1180px; height: 420px; background: url('icons/araxa.jpg') center 40% / cover no-repeat; }
 #hero .shade {
   position: absolute;
   left: 0;
@@ -77,8 +69,8 @@ body {
 #hero .city { position: absolute; left: 72px; top: 104px; font-size: 30px; font-weight: 700; }
 #hero .temp { position: absolute; left: 66px; top: 146px; font-size: 112px; font-weight: 300; line-height: 1; letter-spacing: -0.03em; white-space: nowrap; }
 #hero .temp .sym { width: 72px; height: 72px; margin-right: 16px; vertical-align: 8px; }
-#hero .cond { position: absolute; left: 72px; top: 270px; font-size: 24px; font-weight: 600; color: rgba(255, 255, 255, 0.8); white-space: pre; }
-#hero .hours, #hero .days { position: absolute; top: 330px; height: 100px; white-space: nowrap; }
+#hero .cond { position: absolute; left: 72px; top: 262px; font-size: 24px; font-weight: 600; color: rgba(255, 255, 255, 0.8); white-space: pre; }
+#hero .hours, #hero .days { position: absolute; top: 312px; height: 100px; white-space: nowrap; }
 #hero .hours { left: 72px; }
 #hero .days { left: 690px; padding-left: 40px; border-left: 1px solid rgba(255, 255, 255, 0.18); }
 #hero .slot { display: inline-block; width: 96px; text-align: center; vertical-align: top; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6); }
@@ -87,15 +79,6 @@ body {
 #hero .slot .sym { width: 32px; height: 32px; margin: 10px 0 8px; }
 #hero .slot .deg { font-size: 20px; font-weight: 600; }
 #hero .credit { position: absolute; right: 20px; bottom: 12px; font-size: 13px; color: rgba(255, 255, 255, 0.55); }
-
-/* Tips for the focused app take the banner's place. */
-#hero .tips { position: absolute; left: 0; top: 0; width: 1824px; height: 460px; background: #15171C; visibility: hidden; }
-#hero.tips-on .tips { visibility: visible; }
-#hero .tips .title { top: 92px; }
-#hero .tips .strip { top: 140px; }
-.tip { width: 400px; height: 300px; }
-.tip .pic { position: absolute; left: 0; top: 0; width: 400px; height: 225px; border-radius: 8px; background-color: #23262D; background-size: cover; background-position: center; }
-.tip .when { position: absolute; left: 0; top: 266px; font-size: 18px; color: rgba(255, 255, 255, 0.55); }
 
 /* MARK: - Rows */
 
@@ -113,10 +96,47 @@ body {
   transition: transform 0.08s ease-out;
 }
 .strip > div.focus { -webkit-transform: scale(1.06); transform: scale(1.06); z-index: 2; }
-.app.focus, .focus > .face, .tip.focus > .pic, .focus > .pic, .focus > .ring, .story-card.text.focus, .screen.focus > .art { box-shadow: 0 0 0 3px #FFF; }
+.focus > .face, .focus > .pic, #sheet .app.focus { box-shadow: 0 0 0 3px #FFF; }
+.caption { position: absolute; left: 0; right: 0; font-size: 21px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* The apps bar: logo tiles side by side, close together. */
-#apps { top: 488px; width: 1824px; height: 150px; }
+/* The home row: the main apps, big, with their names under them. */
+#home { top: 444px; width: 1824px; height: 250px; }
+.big { width: 262px; height: 240px; }
+.big .face { position: absolute; left: 0; top: 0; width: 262px; height: 196px; border-radius: 8px; background: #23262D; }
+.big .face .art { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 8px; background-size: cover; background-position: center; background-repeat: no-repeat; }
+.big .face .art.logo.w56, .big .face .art.logo.w60, .big .face .art.logo.w62, .big .face .art.logo.w66 { background-size: 52% auto; }
+.big .face .art.logo.h52, .big .face .art.logo.h58, .big .face .art.logo.h62, .big .face .art.logo.h72 { background-size: auto 44%; }
+.big .face .word { position: absolute; left: 12px; right: 12px; top: 82px; text-align: center; font-size: 26px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.big.tool .face > .sym { position: absolute; left: 103px; top: 70px; width: 56px; height: 56px; color: #C9CCD2; }
+.big .caption { top: 208px; }
+
+/* Below: what's popular on each of them. */
+#lists { top: 724px; width: 1824px; }
+.list { position: absolute; left: 0; width: 1824px; height: 280px; }
+.list .strip { top: 44px; }
+.tip { width: 320px; height: 240px; }
+.tip .pic { position: absolute; left: 0; top: 0; width: 320px; height: 180px; border-radius: 8px; background-color: #23262D; background-size: cover; background-position: center; }
+.tip .caption { top: 190px; font-size: 19px; }
+.tip .when { position: absolute; left: 0; top: 218px; font-size: 16px; color: rgba(255, 255, 255, 0.55); }
+
+/* MARK: - Apps sheet */
+
+#sheet {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  z-index: 4;
+  overflow: hidden;
+  background: #0D0E11;
+  visibility: hidden;
+}
+#sheet.open { visibility: visible; }
+#sheet h2 { position: absolute; left: 168px; top: 64px; margin: 0; font-size: 40px; font-weight: 700; }
+#sheet .grid { position: absolute; left: 168px; top: 170px; }
+#sheet .grid > div { position: absolute; }
+#sheet .app.focus { -webkit-transform: scale(1.06); transform: scale(1.06); z-index: 2; }
 .app { width: 168px; height: 104px; border-radius: 8px; background: #23262D; }
 .app .art { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 8px; background-size: cover; background-position: center; background-repeat: no-repeat; }
 .app .art.logo.w56 { background-size: 56% auto; }
@@ -143,49 +163,10 @@ body {
   opacity: 0;
 }
 .app.focus .name { opacity: 1; }
-
-/* Recently watched: live TV's picture first, then what was opened last. Titles under the pictures. */
-#live { top: 664px; width: 1824px; height: 340px; }
-#live .strip { top: 44px; }
-.screen { width: 400px; height: 280px; }
-.screen .art { position: absolute; left: 0; top: 0; width: 400px; height: 225px; border-radius: 8px; background: #23262D; }
-.screen .art .sym { position: absolute; left: 172px; top: 84px; width: 56px; height: 56px; color: rgba(255, 255, 255, 0.4); }
-.playing .screen .art { background: transparent; }
-.playing .screen .art .sym { display: none; }
-.screen .badge { position: absolute; left: 12px; top: 12px; padding: 3px 10px; border-radius: 4px; background: #E8272F; font-size: 17px; font-weight: 700; }
-.caption { position: absolute; left: 0; right: 0; top: 237px; font-size: 21px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.recent { width: 300px; height: 280px; }
-.recent .face { position: absolute; left: 0; top: 0; width: 300px; height: 225px; border-radius: 8px; }
-.recent .face .art { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 8px; background-size: cover; background-position: center; background-repeat: no-repeat; }
-.recent .face .art.logo.w56, .recent .face .art.logo.w60, .recent .face .art.logo.w62, .recent .face .art.logo.w66 { background-size: 50% auto; }
-.recent .face .art.logo.h52, .recent .face .art.logo.h58, .recent .face .art.logo.h62, .recent .face .art.logo.h72 { background-size: auto 46%; }
-.recent .face .word { position: absolute; left: 12px; right: 12px; top: 96px; text-align: center; font-size: 26px; font-weight: 700; }
-.recent .face > .sym { position: absolute; left: 122px; top: 84px; width: 56px; height: 56px; color: #C9CCD2; }
-.recent .when { position: absolute; left: 0; top: 268px; font-size: 18px; color: rgba(255, 255, 255, 0.55); }
-.source { width: 225px; height: 280px; }
-.source .ring { position: absolute; left: 0; top: 0; width: 225px; height: 225px; border-radius: 8px; background: #23262D; }
-.source .ring .sym { position: absolute; left: 84px; top: 84px; width: 56px; height: 56px; color: #C9CCD2; }
-
-/* MARK: - All apps */
-
-#all {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 1920px;
-  height: 1080px;
-  z-index: 4;
-  background: #0D0E11;
-  opacity: 0;
-  visibility: hidden;
-  -webkit-transition: opacity 0.2s, visibility 0s 0.2s;
-  transition: opacity 0.2s, visibility 0s 0.2s;
-}
-#all.open { opacity: 1; visibility: visible; -webkit-transition: opacity 0.2s; transition: opacity 0.2s; }
-#all h2 { position: absolute; left: 168px; top: 64px; margin: 0; font-size: 40px; font-weight: 700; }
-#all .grid { position: absolute; left: 168px; top: 170px; -webkit-transition: -webkit-transform 0.24s; transition: transform 0.24s; }
-#all .grid > div { position: absolute; }
-#all .app.focus { -webkit-transform: scale(1.06); transform: scale(1.06); z-index: 2; }
+#menu { position: absolute; z-index: 5; width: 260px; padding: 8px 0; border-radius: 10px; background: #2A2D35; visibility: hidden; }
+#menu.open { visibility: visible; }
+#menu .opt { padding: 12px 20px; font-size: 20px; font-weight: 600; white-space: nowrap; }
+#menu .opt.focus { background: #FFF; color: #000; }
 
 #toast {
   position: absolute;

@@ -1,8 +1,7 @@
 /*
  * Smart Hub: Samsung's home layout, without the ads. The rail on the left, the banner (the city's weather over a
- * photo of it, or what's popular on the focused app), the apps bar, and recently watched with live TV's own picture
- * (tizen.tvwindow).
- * ES5, for the Chromium of older TVs.
+ * photo of it), one row of big tiles with the main apps, and below it a row of what's popular on each of them.
+ * Apps opens every app, to open one or to add it to the home row. ES5, for the Chromium of older TVs.
  */
 (function () {
   'use strict';
@@ -28,18 +27,17 @@
     if (on && !has) e.className += ' ' + c;
     if (!on && has) e.className = (' ' + e.className + ' ').replace(' ' + c + ' ', ' ').replace(/^\s+|\s+$/g, '');
   }
-  var scale = 1;
   function fit() {
-    scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    var scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
     stage.style.webkitTransform = stage.style.transform = scale === 1 ? '' : 'scale(' + scale + ')';
-    placeLive();
   }
+  function save(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {} }
+  function load(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } }
 
   // MARK: - Apps
 
-  /** The apps bar, in this order when installed: shelf_apps, by name or id (part of it), exact names first. */
-  var WANTED = (CONFIG.shelfApps || []).map(function (s) { return s.toLowerCase(); });
   var HIDE = (CONFIG.hideApps || []).map(function (s) { return s.toLowerCase(); });
+  var WANTED = (CONFIG.shelfApps || []).map(function (s) { return s.toLowerCase(); });
 
   // The streaming apps' own logos, on their brand color, as on Samsung's apps bar: [match, logo, color, logo size].
   var BRAND = [
@@ -60,10 +58,16 @@
     return null;
   }
 
-  var apps = [], bar = [];
+  var apps = [], home = [];
 
-  function pickBar() {
-    var out = [], i, j;
+  /** The home row's apps: the ones picked in Apps, else shelf_apps in its order (exact names first). */
+  function pickHome() {
+    var ids = load('fmtv.home'), out = [], i, j;
+    if (ids) {
+      for (i = 0; i < ids.length; i++) for (j = 0; j < apps.length; j++) if (apps[j].id === ids[i]) out.push(apps[j]);
+      home = out;
+      return;
+    }
     for (i = 0; i < WANTED.length; i++) {
       var hit = null;
       for (j = 0; j < apps.length && !hit; j++) if (apps[j].title.toLowerCase() === WANTED[i] && out.indexOf(apps[j]) < 0) hit = apps[j];
@@ -73,8 +77,18 @@
       }
       if (hit) out.push(hit);
     }
-    for (j = 0; j < apps.length; j++) if (out.indexOf(apps[j]) < 0) out.push(apps[j]);
-    bar = out;
+    home = out;
+  }
+
+  function onHome(app) { return home.indexOf(app) >= 0; }
+
+  function setHome(app, on) {
+    if (on && !onHome(app)) home.push(app);
+    if (!on) home = home.filter(function (a) { return a !== app; });
+    save('fmtv.home', home.map(function (a) { return a.id; }));
+    renderHome();
+    renderLists();
+    refreshTips();
   }
 
   /** An app's face: its brand logo on its color, else the TV's own icon, else its name. */
@@ -90,27 +104,12 @@
     img.src = src;
   }
 
-  function appTile(app, parent) {
-    var t = el('div', 'app', parent);
-    face(app, t);
-    el('div', 'name', t, app.title);
-    return t;
-  }
-
-  function toolTile(symbol, label, parent) {
-    var t = el('div', 'app tool', parent);
-    sym(symbol, t);
-    el('div', 'word', t, label);
-    return t;
-  }
-
   // MARK: - Rows
 
-  // Each row: its cards (DOM) and what OK does with each. Row 0 is the banner's tips, when it shows some.
-  var rows = [];
-  var st = {rail: false, railAt: 0, row: 1, col: [0, 0, 0], all: false, allAt: 0};
-  rows[0] = [];
-  
+  // rows[0]: the home row; then one row of tips per app that has them. Each item: its node and what OK does.
+  var rows = [[]];
+  var st = {rail: false, railAt: 0, row: 0, col: [], sheet: false, sheetAt: 0, menu: false, menuAt: 0};
+  var ROW_TOP = 444, LIST_TOP = 724, LIST_STEP = 300;
 
   function layStrip(strip, nodes, gap) {
     var x = 0;
@@ -120,87 +119,145 @@
     }
   }
 
-  function renderApps() {
-    var strip = $('apps').querySelector('.strip');
+  function renderHome() {
+    var strip = $('home').querySelector('.strip');
     strip.innerHTML = '';
     var items = [];
-    var allTile = toolTile('apps', 'Apps', strip);
-    items.push({node: allTile, ok: openAll});
-    var live = toolTile('live_tv', 'TV ao vivo', strip);
-    items.push({node: live, ok: function () { launch('source:TV:1'); }});
-    for (var i = 0; i < bar.length; i++) {
+    var all = el('div', 'big tool', strip);
+    sym('apps', el('div', 'face', all));
+    el('div', 'caption', all, 'Apps');
+    items.push({node: all, ok: openSheet});
+    for (var i = 0; i < home.length; i++) {
       (function (app) {
-        items.push({node: appTile(app, strip), ok: function () { launch(app.id); }});
-      })(bar[i]);
-    }
-    layStrip(strip, items.map(function (x) { return x.node; }), 10);
-    rows[1] = items;
-  }
-
-  var sources = [];
-  function renderLive() {
-    var strip = $('live').querySelector('.strip');
-    strip.innerHTML = '';
-    var items = [];
-    var screen = el('div', 'screen', strip);
-    var art = el('div', 'art', screen);
-    sym('live_tv', art);
-    el('div', 'badge', screen, 'Ao vivo');
-    el('div', 'caption', screen, 'TV aberta');
-    items.push({node: screen, ok: function () { launch('source:TV:1'); }});
-    var shown = {};
-    for (var r = 0; r < recent.length; r++) {
-      var app = null, src = null;
-      for (var a = 0; a < apps.length; a++) if (apps[a].id === recent[r].id) app = apps[a];
-      for (var b = 0; b < sources.length; b++) if (sources[b].id === recent[r].id) src = sources[b];
-      if (!app && !src) continue;
-      shown[recent[r].id] = true;
-      (function (it, at) {
-        var c = el('div', 'recent', strip);
-        var art = el('div', 'face', c);
-        if (it.title) face(it, art);
-        else { art.style.backgroundColor = '#1A1E27'; sym(it.symbol || 'hdmi', art); }
-        el('div', 'caption', c, it.title || it.label || it.key);
-        el('div', 'when', c, ago(at));
-        items.push({node: c, ok: function () { launch(it.id); }});
-      })(app || src, recent[r].at);
-    }
-    for (var i = 0; i < sources.length; i++) {
-      if (shown[sources[i].id]) continue;
-      var s = sources[i];
-      if (s.key === 'live' || !s.connected) continue;
-      (function (src) {
-        var c = el('div', 'source', strip);
-        sym(src.symbol || 'hdmi', el('div', 'ring', c));
-        el('div', 'caption', c, src.label || src.key);
-        items.push({node: c, ok: function () { launch(src.id); }});
-      })(s);
-    }
-    var tvPlus = null;
-    for (var j = 0; j < apps.length; j++) if (/tv ?plus/i.test(apps[j].title)) tvPlus = apps[j];
-    if (tvPlus && !shown[tvPlus.id]) {
-      var p = el('div', 'source', strip);
-      var pr = el('div', 'ring', p);
-      pr.style.backgroundColor = '#101828';
-      pr.style.backgroundImage = 'url("icons/tvplus.svg")';
-      pr.style.backgroundSize = 'auto 46%';
-      pr.style.backgroundPosition = 'center';
-      pr.style.backgroundRepeat = 'no-repeat';
-      el('div', 'caption', p, 'TV grátis');
-      items.push({node: p, ok: function () { launch(tvPlus.id); }});
+        var c = el('div', 'big', strip);
+        face(app, el('div', 'face', c));
+        el('div', 'caption', c, app.title);
+        items.push({node: c, ok: function () { launch(app.id); }});
+      })(home[i]);
     }
     layStrip(strip, items.map(function (x) { return x.node; }), 20);
-    rows[2] = items;
-    placeLive();
+    rows[0] = items;
   }
 
-  function ago(at) {
-    var m = Math.max(1, Math.round((Date.now() - at) / 60000));
-    if (m < 60) return 'há ' + m + ' min';
-    var h = Math.round(m / 60);
-    if (h < 24) return 'há ' + h + ' h';
-    var d = Math.round(h / 24);
-    return d === 1 ? 'ontem' : 'há ' + d + ' dias';
+  // MARK: - Tips: what's popular on each home app, one row each
+
+  var TIPS_KEY = 'fmtv.tips', TIPS_FOR = 6 * 3600000, tips = load(TIPS_KEY) || {};
+  var PACKAGES = {netflix: 'nfx', disney: 'dnp', prime: 'prv'};
+  var TIPS_TITLE = {youtube: 'Novos no YouTube', netflix: 'Em alta na Netflix', disney: 'Em alta no Disney+', prime: 'Em alta no Prime Video'};
+
+  function tipsKind(app) {
+    if (/netflix/i.test(app.title)) return 'netflix';
+    if (/disney/i.test(app.title)) return 'disney';
+    if (/prime video/i.test(app.title)) return 'prime';
+    if (/^youtube$/i.test(app.title)) return 'youtube';
+    return '';
+  }
+
+  function request(method, url, data, done) {
+    var x = new XMLHttpRequest();
+    x.open(method, url);
+    if (data) x.setRequestHeader('Content-Type', 'application/json');
+    x.timeout = 15000;
+    x.onload = function () { done(x.status === 200 ? x.responseText : ''); };
+    x.onerror = x.ontimeout = function () { done(''); };
+    x.send(data || null);
+  }
+
+  function saveTips(kind, list) {
+    tips[kind] = {at: Date.now(), list: list};
+    save(TIPS_KEY, tips);
+    renderLists();
+  }
+
+  var POPULAR = 'query($c:Country!,$l:Language!,$f:TitleFilter){popularTitles(country:$c,first:14,filter:$f){edges{node{'
+    + 'objectType content(country:$c,language:$l){title backdrops{backdropUrl}}}}}}';
+
+  /**
+   * Netflix, Disney+ and Prime Video: what's popular on them in this country (JustWatch, no key). YouTube: the newest
+   * videos of youtube_channels (YouTube's own feeds, no key).
+   */
+  function fetchTips(kind) {
+    if (tips[kind] && Date.now() - tips[kind].at < TIPS_FOR) return;
+    if (kind === 'youtube') { fetchVideos(); return; }
+    var data = JSON.stringify({query: POPULAR, variables: {c: Place.country, l: 'pt', f: {packages: [PACKAGES[kind]]}}});
+    request('POST', 'https://apis.justwatch.com/graphql', data, function (text) {
+      var edges = [];
+      try { edges = JSON.parse(text).data.popularTitles.edges; } catch (e) { return; }
+      var out = [];
+      for (var i = 0; i < edges.length && out.length < 12; i++) {
+        var n = edges[i].node, c = n.content, b = c && c.backdrops && c.backdrops[0];
+        if (!b) continue;
+        out.push({title: c.title, sub: n.objectType === 'MOVIE' ? 'Filme' : 'Série',
+          img: 'https://images.justwatch.com' + b.backdropUrl.replace('{profile}', 's640').replace('{format}', 'jpg')});
+      }
+      if (out.length) saveTips(kind, out);
+    });
+  }
+
+  var CHANNELS = CONFIG.youtubeChannels && CONFIG.youtubeChannels.length ? CONFIG.youtubeChannels
+    : ['UCKHhA5hN2UohhFDfNXB_cvQ', 'UCV306eHqgo0LvBf3Mh36AHg', 'UCEWHPFNilsT0IfQfutVzsag'];
+
+  function tagText(node) {
+    return function (tag) { var n = node.getElementsByTagName(tag)[0]; return n ? n.textContent : ''; };
+  }
+
+  function fetchVideos() {
+    var all = [], left = CHANNELS.length;
+    CHANNELS.forEach(function (id) {
+      request('GET', 'https://www.youtube.com/feeds/videos.xml?channel_id=' + id, null, function (xml) {
+        if (xml) {
+          var doc = new DOMParser().parseFromString(xml, 'text/xml'), entries = doc.getElementsByTagName('entry');
+          for (var i = 0; i < entries.length && i < 6; i++) {
+            var text = tagText(entries[i]), video = text('yt:videoId');
+            all.push({title: text('title'), sub: text('name'), video: video, at: Date.parse(text('published')) || 0,
+              img: 'https://i.ytimg.com/vi/' + video + '/hqdefault.jpg'});
+          }
+        }
+        if (--left) return;
+        all.sort(function (a, b) { return b.at - a.at; });
+        if (all.length) saveTips('youtube', all.slice(0, 12));
+      });
+    });
+  }
+
+  function renderLists() {
+    var box = $('lists');
+    box.innerHTML = '';
+    rows.length = 1;
+    for (var i = 0; i < home.length; i++) {
+      var kind = tipsKind(home[i]), list = kind && tips[kind] ? tips[kind].list : [];
+      if (!list.length) continue;
+      var part = el('div', 'list', box);
+      part.style.top = (rows.length - 1) * LIST_STEP + 'px';
+      el('div', 'title', part, TIPS_TITLE[kind]);
+      var strip = el('div', 'strip', part), items = [];
+      for (var j = 0; j < list.length; j++) {
+        (function (t, app) {
+          var c = el('div', 'tip', strip);
+          el('div', 'pic', c).style.backgroundImage = 'url("' + t.img + '")';
+          el('div', 'caption', c, t.title);
+          el('div', 'when', c, t.sub);
+          items.push({node: c, ok: function () { openTip(t, app); }});
+        })(list[j], home[i]);
+      }
+      layStrip(strip, items.map(function (x) { return x.node; }), 20);
+      rows.push(items);
+    }
+    if (st.row >= rows.length) st.row = rows.length - 1;
+    focus();
+  }
+
+  /** A YouTube tip opens its video (the payload Samsung's own previews use); the others open their app. */
+  function openTip(t, app) {
+    if (t.video && window.tizen) {
+      try {
+        var data = [new window.tizen.ApplicationControlData('PAYLOAD', ['{"values": "v=' + t.video + '"}'])];
+        var c = new window.tizen.ApplicationControl('http://tizen.org/appcontrol/operation/view', null, null, null, data);
+        window.tizen.application.launchAppControl(c, app.id, null, function () { launch(app.id); });
+        return;
+      } catch (e) {}
+    }
+    launch(app.id);
   }
 
   // MARK: - Banner
@@ -234,186 +291,11 @@
     }
   }
 
-  // MARK: - Tips: what's popular on the focused app, in the banner, as Samsung's apps bar previews do
-
-  var TIPS_KEY = 'fmtv.tips', TIPS_FOR = 6 * 3600000, tips = {};
-  try { tips = JSON.parse(localStorage.getItem(TIPS_KEY)) || {}; } catch (e) {}
-  var PACKAGES = {netflix: 'nfx', disney: 'dnp'};
-  var TIPS_TITLE = {netflix: 'Em alta na Netflix', disney: 'Em alta no Disney+', youtube: 'Novos no YouTube'};
-  var tipsShown = '', tipsApp = null, tipsTimer = null;
-
-  function tipsKind(app) {
-    if (!app || !app.id) return '';
-    if (/netflix/i.test(app.title)) return 'netflix';
-    if (/disney/i.test(app.title)) return 'disney';
-    if (/^youtube$/i.test(app.title)) return 'youtube';
-    return '';
-  }
-
-  function request(method, url, body, done) {
-    var x = new XMLHttpRequest();
-    x.open(method, url);
-    if (body) x.setRequestHeader('Content-Type', 'application/json');
-    x.timeout = 15000;
-    x.onload = function () { done(x.status === 200 ? x.responseText : ''); };
-    x.onerror = x.ontimeout = function () { done(''); };
-    x.send(body || null);
-  }
-
-  function saveTips(kind, list) {
-    tips[kind] = {at: Date.now(), list: list};
-    try { localStorage.setItem(TIPS_KEY, JSON.stringify(tips)); } catch (e) {}
-    if (tipsShown === kind) { tipsShown = ''; showTips(kind); }
-  }
-
-  var POPULAR = 'query($c:Country!,$l:Language!,$f:TitleFilter){popularTitles(country:$c,first:14,filter:$f){edges{node{'
-    + 'objectType content(country:$c,language:$l){title backdrops{backdropUrl}}}}}}';
-
-  /**
-   * Netflix and Disney+: what's popular on them in this country (JustWatch, no key). YouTube: the newest videos of
-   * youtube_channels (YouTube's own feeds, no key).
-   */
-  function fetchTips(kind) {
-    if (tips[kind] && Date.now() - tips[kind].at < TIPS_FOR) return;
-    if (kind === 'youtube') { fetchVideos(); return; }
-    var body = JSON.stringify({query: POPULAR, variables: {c: Place.country, l: 'pt', f: {packages: [PACKAGES[kind]]}}});
-    request('POST', 'https://apis.justwatch.com/graphql', body, function (text) {
-      var edges = [];
-      try { edges = JSON.parse(text).data.popularTitles.edges; } catch (e) { return; }
-      var out = [];
-      for (var i = 0; i < edges.length && out.length < 12; i++) {
-        var n = edges[i].node, c = n.content, b = c && c.backdrops && c.backdrops[0];
-        if (!b) continue;
-        out.push({title: c.title, sub: n.objectType === 'MOVIE' ? 'Filme' : 'Série',
-          img: 'https://images.justwatch.com' + b.backdropUrl.replace('{profile}', 's640').replace('{format}', 'jpg')});
-      }
-      if (out.length) saveTips(kind, out);
-    });
-  }
-
-  var CHANNELS = CONFIG.youtubeChannels && CONFIG.youtubeChannels.length ? CONFIG.youtubeChannels
-    : ['UCKHhA5hN2UohhFDfNXB_cvQ', 'UCV306eHqgo0LvBf3Mh36AHg', 'UCEWHPFNilsT0IfQfutVzsag'];
-
-  function fetchVideos() {
-    var all = [], left = CHANNELS.length;
-    CHANNELS.forEach(function (id) {
-      request('GET', 'https://www.youtube.com/feeds/videos.xml?channel_id=' + id, null, function (xml) {
-        if (xml) {
-          var doc = new DOMParser().parseFromString(xml, 'text/xml'), entries = doc.getElementsByTagName('entry');
-          for (var i = 0; i < entries.length && i < 6; i++) {
-            var text = tagText(entries[i]), video = text('yt:videoId');
-            all.push({title: text('title'), sub: text('name'), video: video, at: Date.parse(text('published')) || 0,
-              img: 'https://i.ytimg.com/vi/' + video + '/hqdefault.jpg'});
-          }
-        }
-        if (--left) return;
-        all.sort(function (a, b) { return b.at - a.at; });
-        if (all.length) saveTips('youtube', all.slice(0, 12));
-      });
-    });
-  }
-
-  function tagText(node) {
-    return function (tag) { var n = node.getElementsByTagName(tag)[0]; return n ? n.textContent : ''; };
-  }
-
-  /** The banner shows the focused app's tips (kind), or the weather (''). */
-  function showTips(kind) {
-    var list = kind && tips[kind] ? tips[kind].list : [];
-    if (!list.length) kind = '';
-    if (kind === tipsShown) return;
-    tipsShown = kind;
-    var box = hero.querySelector('.tips'), strip = box.querySelector('.strip');
-    strip.innerHTML = '';
-    var items = [];
-    for (var i = 0; i < list.length; i++) {
-      (function (t) {
-        var c = el('div', 'tip', strip);
-        el('div', 'pic', c).style.backgroundImage = 'url("' + t.img + '")';
-        el('div', 'caption', c, t.title);
-        el('div', 'when', c, t.sub);
-        items.push({node: c, ok: function () { openTip(t); }});
-      })(list[i]);
-    }
-    box.querySelector('.title').textContent = kind ? TIPS_TITLE[kind] : '';
-    layStrip(strip, items.map(function (x) { return x.node; }), 20);
-    strip.style.webkitTransform = strip.style.transform = '';
-    rows[0] = items;
-    st.col[0] = 0;
-    setClass(hero, 'tips-on', !!kind);
-  }
-
-  function openTip(t) {
-    var app = tipsApp;
-    if (!app) return;
-    if (t.video && window.tizen) {
-      try {
-        remember(app.id);
-        var data = [new window.tizen.ApplicationControlData('PAYLOAD', ['{"values": "v=' + t.video + '"}'])];
-        var c = new window.tizen.ApplicationControl('http://tizen.org/appcontrol/operation/view', null, null, null, data);
-        window.tizen.application.launchAppControl(c, app.id, null, function () { launch(app.id); });
-        return;
-      } catch (e) {}
-    }
-    launch(app.id);
-  }
-
-  /** Follows the apps bar's focus, a moment later, so moving along the bar stays instant. */
-  function followTips() {
-    if (st.row === 0 && !st.rail && !st.all) return;
-    var app = !st.rail && !st.all && st.row === 1 ? bar[st.col[1] - 2] : null;
-    var kind = tipsKind(app);
-    clearTimeout(tipsTimer);
-    if (kind === tipsShown) { tipsApp = app || tipsApp; return; }
-    tipsTimer = setTimeout(function () { tipsApp = app; showTips(kind); focus(); }, kind ? 180 : 0);
-  }
-
-  // MARK: - Live picture
-
-  var liveShown = false, liveRect = '';
-
-  /** The TV's picture under the first live card: the page leaves #hole clear, the video plane shows through. */
-  function placeLive() {
-    var card = rows[2] && rows[2][0] && rows[2][0].node;
-    var hole = $('hole');
-    if (!card) return;
-    var strip = card.parentNode;
-    var x = 96 + 72 + card.offsetLeft + stripShift(strip), y = 664 + 44;
-    var visible = !document.hidden && !st.all && x > 0 && x < 1920;
-    var r = [Math.round(x * scale) + 'px', Math.round(y * scale) + 'px', Math.round(400 * scale) + 'px', Math.round(225 * scale) + 'px'];
-    var want = visible ? r.join(',') : '';
-    if (want === liveRect) return;
-    liveRect = want;
-    hole.style.left = (x - 96) + 'px';
-    hole.style.top = y + 'px';
-    hole.style.width = '400px';
-    hole.style.height = '225px';
-    if (!window.tizen || !window.tizen.tvwindow) return;
-    try {
-      if (!visible) {
-        if (liveShown) window.tizen.tvwindow.hide(function () {}, function () {}, 'MAIN');
-        liveShown = false;
-        setClass(body, 'playing', false);
-        return;
-      }
-      window.tizen.tvwindow.show(function () { liveShown = true; setClass(body, 'playing', true); },
-        function () { setClass(body, 'playing', false); }, r, 'MAIN');
-    } catch (e) {
-      setClass(body, 'playing', false);
-    }
-  }
-
-  function stripShift(strip) {
-    var m = /translateX\((-?[\d.]+)px\)/.exec(strip.style.transform || strip.style.webkitTransform || '');
-    return m ? +m[1] : 0;
-  }
-
   // MARK: - Focus and keys
 
   var RAIL = [
-    {symbol: 'home', label: 'Início', ok: function () { st.rail = false; st.row = 1; st.col[1] = 0; }},
-    {symbol: 'live_tv', label: 'TV ao vivo', ok: function () { launch('source:TV:1'); }},
-    {symbol: 'apps', label: 'Apps', ok: function () { openAll(); }},
+    {symbol: 'home', label: 'Início', ok: function () { st.rail = false; st.row = 0; st.col[0] = 0; }},
+    {symbol: 'apps', label: 'Apps', ok: function () { openSheet(); }},
     {symbol: 'settings', label: 'Configurações', ok: function () { TV.settings(); }}
   ];
 
@@ -421,17 +303,22 @@
     var rail = $('rail');
     for (var i = 0; i < RAIL.length; i++) {
       var it = el('div', 'item' + (i === 0 ? ' here' : ''), rail);
-      it.style.top = (330 + i * 92) + 'px';
+      it.style.top = (380 + i * 92) + 'px';
       sym(RAIL[i].symbol, it);
       el('div', 'tip', it, RAIL[i].label);
     }
   }
 
-  function scrollStrip(row) {
-    var items = rows[row];
+  function shiftOf(strip) {
+    var m = /translateX\((-?[\d.]+)px\)/.exec(strip.style.transform || strip.style.webkitTransform || '');
+    return m ? +m[1] : 0;
+  }
+
+  function scrollStrip(r) {
+    var items = rows[r];
     if (!items || !items.length) return;
-    var node = items[st.col[row]].node, strip = node.parentNode;
-    var shift = stripShift(strip), room = 1816 - 80 - 80;
+    var node = items[st.col[r]].node, strip = node.parentNode;
+    var shift = shiftOf(strip), room = 1824 - 72 - 72;
     var left = node.offsetLeft + shift, right = left + node.offsetWidth;
     if (right > room) shift -= right - room;
     if (left < 0) shift -= left;
@@ -441,107 +328,126 @@
   function focus() {
     var r, i;
     var railItems = $('rail').children;
-    for (i = 0; i < railItems.length; i++) setClass(railItems[i], 'focus', st.rail && st.railAt === i && !st.all);
+    for (i = 0; i < railItems.length; i++) setClass(railItems[i], 'focus', st.rail && st.railAt === i && !st.sheet);
     for (r = 0; r < rows.length; r++) {
-      var items = rows[r] || [];
-      st.col[r] = Math.max(0, Math.min(st.col[r], items.length - 1));
-      for (i = 0; i < items.length; i++) setClass(items[i].node, 'focus', !st.rail && !st.all && st.row === r && st.col[r] === i);
+      var items = rows[r];
+      st.col[r] = Math.max(0, Math.min(st.col[r] || 0, items.length - 1));
+      for (i = 0; i < items.length; i++) setClass(items[i].node, 'focus', !st.rail && !st.sheet && st.row === r && st.col[r] === i);
       scrollStrip(r);
     }
-    if (st.all) focusAll();
-    placeLive();
-    followTips();
+    // The focused list goes where the home row was, with the row above it still in sight.
+    var lift = st.row < 1 ? 0 : LIST_TOP + (st.row - 1) * LIST_STEP - ROW_TOP;
+    var main = $('main');
+    main.style.webkitTransform = main.style.transform = lift ? 'translateY(' + (-lift) + 'px)' : '';
+    if (st.sheet) focusSheet();
   }
 
-  function rowHasItems(r) { return rows[r] && rows[r].length > 0; }
-
   function move(dx, dy) {
-    if (st.all) { moveAll(dx, dy); return; }
+    if (st.sheet) { moveSheet(dx, dy); return; }
     if (st.rail) {
       if (dy) st.railAt = Math.max(0, Math.min(RAIL.length - 1, st.railAt + dy));
       if (dx > 0) st.rail = false;
-      focus();
-      return;
-    }
-    if (dx) {
-      if (st.col[st.row] + dx < 0) st.rail = true;
+    } else if (dx) {
+      if ((st.col[st.row] || 0) + dx < 0) st.rail = true;
       else st.col[st.row] = Math.min(rows[st.row].length - 1, st.col[st.row] + dx);
-    }
-    if (dy) {
-      var next = st.row + dy;
-      while (next >= 0 && next < 3 && !rowHasItems(next)) next += dy;
-      if (next >= 0 && next < 3) st.row = next;
+    } else if (dy) {
+      st.row = Math.max(0, Math.min(rows.length - 1, st.row + dy));
     }
     focus();
   }
 
   function activate() {
-    if (st.all) { var a = allApps[st.allAt]; if (a) launch(a.id); return; }
+    if (st.sheet) { activateSheet(); return; }
     if (st.rail) { RAIL[st.railAt].ok(); focus(); return; }
     var it = rows[st.row][st.col[st.row]];
     if (it) it.ok();
   }
 
   function back() {
-    if (st.all) { closeAll(); return; }
-    if (st.rail || st.row !== 1 || st.col[1] !== 0) { st.rail = false; st.row = 1; st.col[1] = 0; focus(); }
+    if (st.menu) { closeMenu(); return; }
+    if (st.sheet) { closeSheet(); return; }
+    st.rail = false;
+    st.row = 0;
+    st.col[0] = 0;
+    focus();
   }
 
   function launch(id) {
-    remember(id);
     TV.launch(id, null, function (ok) { if (!ok) toast('Não deu para abrir'); });
   }
 
-  // MARK: - Recently watched: what was opened from here, newest first
+  // MARK: - Apps sheet: every app; OK offers to open it or to put it on (or take it off) the home row
 
-  var RECENT_KEY = 'fmtv.recent', recent = [];
-  try { recent = JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch (e) {}
+  var COLS = 6;
 
-  function remember(id) {
-    if (id === 'source:TV:1') return;
-    recent = recent.filter(function (r) { return r.id !== id; });
-    recent.unshift({id: id, at: Date.now()});
-    recent = recent.slice(0, 10);
-    try { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); } catch (e) {}
-  }
-
-  // MARK: - All apps
-
-  var allApps = [], COLS = 6;
-
-  function openAll() {
-    allApps = apps.slice();
-    var grid = $('all').querySelector('.grid');
+  function openSheet() {
+    var grid = $('sheet').querySelector('.grid');
     grid.innerHTML = '';
-    for (var i = 0; i < allApps.length; i++) {
-      var t = appTile(allApps[i], grid);
+    for (var i = 0; i < apps.length; i++) {
+      var t = el('div', 'app', grid);
+      face(apps[i], t);
+      el('div', 'name', t, apps[i].title);
       t.style.left = (i % COLS) * 260 + 'px';
       t.style.top = Math.floor(i / COLS) * 180 + 'px';
-      t.style.position = 'absolute';
     }
-    st.all = true;
-    st.allAt = 0;
-    setClass($('all'), 'open', true);
+    st.sheet = true;
+    st.sheetAt = 0;
+    setClass($('sheet'), 'open', true);
     focus();
   }
 
-  function closeAll() {
-    st.all = false;
-    setClass($('all'), 'open', false);
+  function closeSheet() {
+    st.menu = false;
+    setClass($('menu'), 'open', false);
+    st.sheet = false;
+    setClass($('sheet'), 'open', false);
     focus();
   }
 
-  function focusAll() {
-    var tiles = $('all').querySelector('.grid').children;
-    for (var i = 0; i < tiles.length; i++) setClass(tiles[i], 'focus', i === st.allAt);
-    var row = Math.floor(st.allAt / COLS);
-    var grid = $('all').querySelector('.grid');
+  function focusSheet() {
+    var grid = $('sheet').querySelector('.grid'), tiles = grid.children;
+    for (var i = 0; i < tiles.length; i++) setClass(tiles[i], 'focus', i === st.sheetAt && !st.menu);
+    var row = Math.floor(st.sheetAt / COLS);
     grid.style.webkitTransform = grid.style.transform = 'translateY(' + (-Math.max(0, row - 3) * 180) + 'px)';
+    var opts = $('menu').children;
+    for (var j = 0; j < opts.length; j++) setClass(opts[j], 'focus', st.menu && st.menuAt === j);
   }
 
-  function moveAll(dx, dy) {
-    var n = allApps.length, i = st.allAt + dx + dy * COLS;
-    if (i >= 0 && i < n) st.allAt = i;
+  function moveSheet(dx, dy) {
+    if (st.menu) { if (dy) st.menuAt = Math.max(0, Math.min(1, st.menuAt + dy)); focus(); return; }
+    var i = st.sheetAt + dx + dy * COLS;
+    if (i >= 0 && i < apps.length) st.sheetAt = i;
+    focus();
+  }
+
+  function activateSheet() {
+    var app = apps[st.sheetAt];
+    if (!app) return;
+    if (!st.menu) { openMenu(app); return; }
+    var add = !onHome(app), open = st.menuAt === 0;
+    closeMenu();
+    if (open) { launch(app.id); return; }
+    setHome(app, add);
+    toast(add ? app.title + ' está na tela inicial' : app.title + ' saiu da tela inicial');
+  }
+
+  /** A small menu under the focused app: open it, or put it on (take it off) the home row. */
+  function openMenu(app) {
+    var menu = $('menu'), row = Math.floor(st.sheetAt / COLS);
+    menu.innerHTML = '';
+    el('div', 'opt', menu, 'Abrir');
+    el('div', 'opt', menu, onHome(app) ? 'Tirar da tela inicial' : 'Pôr na tela inicial');
+    menu.style.left = (168 + (st.sheetAt % COLS) * 260) + 'px';
+    menu.style.top = (170 + (row - Math.max(0, row - 3)) * 180 + 116) + 'px';
+    st.menu = true;
+    st.menuAt = 0;
+    setClass(menu, 'open', true);
+    focus();
+  }
+
+  function closeMenu() {
+    st.menu = false;
+    setClass($('menu'), 'open', false);
     focus();
   }
 
@@ -569,6 +475,10 @@
 
   // MARK: - Start
 
+  function refreshTips() {
+    for (var i = 0; i < home.length; i++) if (tipsKind(home[i])) fetchTips(tipsKind(home[i]));
+  }
+
   function loadApps(done) {
     TV.apps(function (list) {
       apps = list.filter(function (a) {
@@ -576,38 +486,25 @@
         for (var i = 0; i < HIDE.length; i++) if (id.indexOf(HIDE[i]) >= 0 || title.indexOf(HIDE[i]) >= 0) return false;
         return true;
       });
-      Data.setApps(apps);
-      pickBar();
-      TV.inputs(function (list2) {
-        sources = list2;
-        renderApps();
-        renderLive();
-        focus();
-        if (done) done();
-      });
+      pickHome();
+      renderHome();
+      renderLists();
+      if (done) done();
     });
   }
 
-  if (TV.name === 'tizen') {
-    setClass(body, 'tv', true);
-    document.documentElement.style.background = 'transparent';
-  }
+  if (TV.name === 'tizen') setClass(body, 'tv', true);
   I18N.set(Prefs.language());
   renderRail();
   renderWeather();
   fit();
-  loadApps(function () {
-    Data.refreshWeather();
-    for (var i = 0; i < bar.length; i++) if (tipsKind(bar[i])) fetchTips(tipsKind(bar[i]));
-  });
+  loadApps(function () { Data.refreshWeather(); refreshTips(); });
   Data.onChange(renderWeather);
 
   window.addEventListener('resize', fit);
-  window.addEventListener('appcontrol', function () { closeAll(); back(); loadApps(); });
+  window.addEventListener('appcontrol', function () { closeSheet(); back(); loadApps(); });
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) loadApps(function () { Data.refreshWeather(); });
-    liveRect = null;
-    placeLive();
+    if (!document.hidden) loadApps(function () { Data.refreshWeather(); refreshTips(); });
   });
   setInterval(function () { renderWeather(); Data.refreshWeather(); }, 30000);
 
