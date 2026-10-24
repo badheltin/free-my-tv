@@ -1,6 +1,6 @@
 /*
- * Smart Hub: Samsung's home layout, without the ads. The rail on the left, the banner (local news and the weather),
- * the apps bar, live TV with the TV's own picture (tizen.tvwindow) and the region's news from Google News.
+ * Smart Hub: Samsung's home layout, without the ads. The rail on the left, the banner (the city's weather over a
+ * photo of it), the apps bar, and recently watched with live TV's own picture (tizen.tvwindow).
  * ES5, for the Chromium of older TVs.
  */
 (function () {
@@ -8,8 +8,6 @@
 
   var stage = document.getElementById('stage'), body = document.body;
   var K = TV.keys;
-  var NEWS_QUERY = CONFIG.newsQuery || Place.city || '';
-  var NEWS_KEY = 'fmtv.news';
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, parent, text) {
@@ -107,10 +105,10 @@
 
   // MARK: - Rows
 
-  // Each row: its cards (DOM), what OK does with each, and how far down #main slides when it has the focus.
+  // Each row: its cards (DOM) and what OK does with each. Row 0 is the banner, which takes no focus.
   var rows = [];
-  var st = {rail: false, railAt: 0, row: 1, col: [0, 0, 0, 0], all: false, allAt: 0};
-  var SLIDE = [0, 0, 230, 560];
+  var st = {rail: false, railAt: 0, row: 1, col: [0, 0, 0], all: false, allAt: 0};
+  
 
   function layStrip(strip, nodes, gap) {
     var x = 0;
@@ -194,11 +192,6 @@
     placeLive();
   }
 
-  // MARK: - News
-
-  var news = [];
-  try { news = JSON.parse(localStorage.getItem(NEWS_KEY)) || []; } catch (e) {}
-
   function ago(at) {
     var m = Math.max(1, Math.round((Date.now() - at) / 60000));
     if (m < 60) return 'há ' + m + ' min';
@@ -208,153 +201,40 @@
     return d === 1 ? 'ontem' : 'há ' + d + ' dias';
   }
 
-  function tagText(it) {
-    return function (tag) { var n = it.getElementsByTagName(tag)[0]; return n ? n.textContent : ''; };
-  }
-
-  /** An RSS feed's stories: Google News (the source in <source>, no photo) or G1 (a photo in media:content). */
-  function parseNews(xml, fallbackSource) {
-    var doc = new DOMParser().parseFromString(xml, 'text/xml');
-    var items = doc.getElementsByTagName('item'), out = [];
-    for (var i = 0; i < items.length && out.length < 20; i++) {
-      var it = items[i];
-      var text = tagText(it);
-      var source = text('source') || fallbackSource, title = text('title').replace(/^\s+|\s+$/g, '');
-      if (source && title.slice(-source.length - 3) === ' - ' + source) title = title.slice(0, -source.length - 3);
-      if (/ao vivo: assista/i.test(title)) continue;
-      var media = it.getElementsByTagName('media:content')[0];
-      out.push({title: title, source: source, link: text('link'), at: Date.parse(text('pubDate')) || 0,
-        photo: media ? media.getAttribute('url') : ''});
-    }
-    return out;
-  }
-
-  // The city's own news (Google News) and the region's TV news with photos (G1 Triângulo e Alto Paranaíba).
-  var FEEDS = [
-    {url: 'https://news.google.com/rss/search?q=' + encodeURIComponent(NEWS_QUERY) + '&hl=pt-BR&gl=BR&ceid=BR:pt-419',
-      sample: 'news-sample.xml', source: ''},
-    {url: 'https://g1.globo.com/rss/g1/mg/triangulo-mineiro/', sample: 'g1-sample.xml', source: 'g1 Triângulo e Alto Paranaíba'}
-  ];
-
-  function key(title) { return title.toLowerCase().replace(/[^a-z0-9à-ú]+/g, ' ').slice(0, 48); }
-
-  function fetchNews() {
-    if (!NEWS_QUERY) return;
-    var got = [], left = FEEDS.length;
-    FEEDS.forEach(function (f) {
-      var x = new XMLHttpRequest();
-      x.open('GET', TV.name === 'browser' ? f.sample : f.url);
-      x.timeout = 15000;
-      function done() {
-        if (x.status === 200) got = got.concat(parseNews(x.responseText, f.source));
-        if (--left) return;
-        var seen = {}, list = [];
-        got.sort(function (a, b) { return b.at - a.at; });
-        for (var i = 0; i < got.length && list.length < 16; i++) {
-          var k = key(got[i].title);
-          if (seen[k]) continue;
-          seen[k] = true;
-          list.push(got[i]);
-        }
-        if (!list.length) return;
-        news = list;
-        try { localStorage.setItem(NEWS_KEY, JSON.stringify(news)); } catch (e) {}
-        renderNews();
-        showStory(0);
-      }
-      x.onload = done;
-      x.onerror = x.ontimeout = function () { x = {status: 0}; done(); };
-      x.send();
-    });
-  }
-
-  function openLink(url) {
-    try {
-      var c = new window.tizen.ApplicationControl('http://tizen.org/appcontrol/operation/view', url, null, null, null);
-      window.tizen.application.launchAppControl(c, null, null, function () { toast('Não deu para abrir o navegador'); });
-    } catch (e) {
-      if (TV.name === 'browser') window.open(url, '_blank');
-    }
-  }
-
-  function renderNews() {
-    var part = $('news'), strip = part.querySelector('.strip');
-    part.querySelector('.title').textContent = 'Notícias de ' + (Place.city || 'sua região') + ' e região';
-    strip.innerHTML = '';
-    var old = part.querySelector('.empty');
-    if (old) part.removeChild(old);
-    var items = [];
-    for (var i = 0; i < news.length; i++) {
-      (function (n) {
-        var c = el('div', 'story-card' + (n.photo ? '' : ' text'), strip);
-        if (n.photo) el('div', 'pic', c).style.backgroundImage = 'url("' + n.photo + '")';
-        el('div', 'from', c, n.source + (n.at ? '  ' + ago(n.at) : ''));
-        el('div', 'headline', c, n.title);
-        items.push({node: c, ok: function () { openLink(n.link); }});
-      })(news[i]);
-    }
-    if (!items.length) el('div', 'empty', part, 'As notícias aparecem aqui assim que a TV se conectar à internet.');
-    layStrip(strip, items.map(function (x) { return x.node; }), 20);
-    rows[3] = items;
-    if (st.row === 3 && !items.length) st.row = 2;
-    focus();
-  }
-
   // MARK: - Banner
 
-  var storyAt = 0, storyTimer = null;
   var hero = $('hero');
 
-  function heroStories() {
-    var local = new RegExp(NEWS_QUERY.slice(0, 5), 'i');
-    var withPhoto = news.filter(function (n) { return n.photo; });
-    withPhoto.sort(function (a, b) { return (local.test(b.title) ? 1 : 0) - (local.test(a.title) ? 1 : 0); });
-    return (withPhoto.length >= 3 ? withPhoto : news).slice(0, 5);
-  }
-
-  function showStory(i) {
-    var list = heroStories(), count = list.length;
-    var box = hero.querySelector('.story'), dots = hero.querySelector('.dots');
-    if (!count) {
-      box.querySelector('.kicker').textContent = Place.city || '';
-      box.querySelector('.headline').textContent = 'Bem-vindo';
-      box.querySelector('.when').textContent = '';
-      dots.innerHTML = '';
-      return;
-    }
-    storyAt = (i + count) % count;
-    setClass(box, 'out', true);
-    setTimeout(function () {
-      var n = list[storyAt];
-      box.querySelector('.kicker').textContent = n.source;
-      box.querySelector('.headline').textContent = n.title;
-      box.querySelector('.when').textContent = n.at ? ago(n.at) : '';
-      var photo = hero.querySelector('.photo');
-      photo.style.backgroundImage = n.photo ? 'url("' + n.photo + '")' : '';
-      setClass(hero, 'has-photo', !!n.photo);
-      dots.innerHTML = '';
-      for (var d = 0; d < count; d++) el('span', 'dot' + (d === storyAt ? ' on' : ''), dots);
-      setClass(box, 'out', false);
-    }, 220);
-    clearTimeout(storyTimer);
-    storyTimer = setTimeout(function () { showStory(storyAt + 1); }, 9000);
-  }
-
+  /** The city's weather: now, the next hours and the next days. */
   function renderWeather() {
-    var w = Data.weather, box = hero.querySelector('.weather');
-    box.querySelector('.clock').textContent = formatDate('format|h:mm', Date.now()) + '   ' + formatDate('format|EEE, d MMM', Date.now());
-    var temp = box.querySelector('.temp');
+    var w = Data.weather, now = Date.now();
+    hero.querySelector('.clock').textContent = formatDate('format|h:mm', now) + '   ' + formatDate('format|EEEE, d MMM', now);
+    hero.querySelector('.city').textContent = Place.city || '';
+    var temp = hero.querySelector('.temp'), hours = hero.querySelector('.hours'), days = hero.querySelector('.days');
     temp.innerHTML = '';
-    if (!w) { box.querySelector('.cond').textContent = Place.city || ''; return; }
+    hours.innerHTML = '';
+    days.innerHTML = '';
+    if (!w) { hero.querySelector('.cond').textContent = ''; return; }
     sym(Data.symbol(w.code, w.isDay), temp);
     el('span', '', temp, Data.degrees(w.temp));
-    box.querySelector('.cond').textContent = Place.city + ', ' + Data.condition(w.code, w.isDay).toLowerCase();
-    box.querySelector('.range').textContent = Data.degrees(w.max) + ' / ' + Data.degrees(w.min);
+    hero.querySelector('.cond').textContent = Data.condition(w.code, w.isDay) + '   ' + Data.degrees(w.max) + ' / ' + Data.degrees(w.min);
+    for (var i = 0; i < w.hours.length; i++) {
+      var h = el('div', 'slot', hours);
+      el('div', 'at', h, Data.hour(w.hours[i].at));
+      sym(Data.symbol(w.hours[i].code, w.hours[i].day), h);
+      el('div', 'deg', h, Data.degrees(w.hours[i].temp));
+    }
+    for (var j = 0; j < w.days.length; j++) {
+      var d = el('div', 'slot', days);
+      el('div', 'at', d, Data.weekday(w.days[j].at));
+      sym(Data.symbol(w.days[j].code, true), d);
+      el('div', 'deg', d, Data.degrees(w.days[j].max) + '  ' + Data.degrees(w.days[j].min));
+    }
   }
 
   // MARK: - Live picture
 
-  var liveShown = false;
+  var liveShown = false, liveRect = '';
 
   /** The TV's picture under the first live card: the page leaves #hole clear, the video plane shows through. */
   function placeLive() {
@@ -362,13 +242,16 @@
     var hole = $('hole');
     if (!card) return;
     var strip = card.parentNode;
-    var x = 96 + 72 + card.offsetLeft + stripShift(strip);
-    var y = 664 + 44 - SLIDE[st.row];
+    var x = 96 + 72 + card.offsetLeft + stripShift(strip), y = 664 + 44;
+    var visible = !document.hidden && !st.all && x > 0 && x < 1920;
+    var r = [Math.round(x * scale) + 'px', Math.round(y * scale) + 'px', Math.round(400 * scale) + 'px', Math.round(225 * scale) + 'px'];
+    var want = visible ? r.join(',') : '';
+    if (want === liveRect) return;
+    liveRect = want;
     hole.style.left = (x - 96) + 'px';
-    hole.style.top = (y + SLIDE[st.row]) + 'px';
+    hole.style.top = y + 'px';
     hole.style.width = '400px';
     hole.style.height = '225px';
-    var visible = !document.hidden && !st.all && y > -100 && y + 225 < 1180;
     if (!window.tizen || !window.tizen.tvwindow) return;
     try {
       if (!visible) {
@@ -377,7 +260,6 @@
         setClass(body, 'playing', false);
         return;
       }
-      var r = [Math.round(x * scale) + 'px', Math.round(y * scale) + 'px', Math.round(400 * scale) + 'px', Math.round(225 * scale) + 'px'];
       window.tizen.tvwindow.show(function () { liveShown = true; setClass(body, 'playing', true); },
         function () { setClass(body, 'playing', false); }, r, 'MAIN');
     } catch (e) {
@@ -424,20 +306,17 @@
     var r, i;
     var railItems = $('rail').children;
     for (i = 0; i < railItems.length; i++) setClass(railItems[i], 'focus', st.rail && st.railAt === i && !st.all);
-    setClass(hero, 'focus', !st.rail && st.row === 0 && !st.all);
     for (r = 1; r < rows.length; r++) {
       var items = rows[r] || [];
       st.col[r] = Math.max(0, Math.min(st.col[r], items.length - 1));
       for (i = 0; i < items.length; i++) setClass(items[i].node, 'focus', !st.rail && !st.all && st.row === r && st.col[r] === i);
       scrollStrip(r);
     }
-    var main = $('main');
-    main.style.webkitTransform = main.style.transform = 'translateY(' + (-SLIDE[st.row]) + 'px)';
     if (st.all) focusAll();
     placeLive();
   }
 
-  function rowHasItems(r) { return r === 0 ? true : rows[r] && rows[r].length > 0; }
+  function rowHasItems(r) { return rows[r] && rows[r].length > 0; }
 
   function move(dx, dy) {
     if (st.all) { moveAll(dx, dy); return; }
@@ -448,14 +327,13 @@
       return;
     }
     if (dx) {
-      if (st.row === 0) { if (dx < 0) st.rail = true; else showStory(storyAt + 1); }
-      else if (st.col[st.row] + dx < 0) st.rail = true;
+      if (st.col[st.row] + dx < 0) st.rail = true;
       else st.col[st.row] = Math.min(rows[st.row].length - 1, st.col[st.row] + dx);
     }
     if (dy) {
       var next = st.row + dy;
-      while (next >= 0 && next < 4 && !rowHasItems(next)) next += dy;
-      if (next >= 0 && next < 4) st.row = next;
+      while (next >= 1 && next < 3 && !rowHasItems(next)) next += dy;
+      if (next >= 1 && next < 3) st.row = next;
     }
     focus();
   }
@@ -463,7 +341,6 @@
   function activate() {
     if (st.all) { var a = allApps[st.allAt]; if (a) launch(a.id); return; }
     if (st.rail) { RAIL[st.railAt].ok(); focus(); return; }
-    if (st.row === 0) { var h = heroStories()[storyAt]; if (h) openLink(h.link); return; }
     var it = rows[st.row][st.col[st.row]];
     if (it) it.ok();
   }
@@ -580,22 +457,19 @@
   }
   I18N.set(Prefs.language());
   renderRail();
-  rows[3] = [];
-  renderNews();
-  showStory(0);
   renderWeather();
   fit();
-  loadApps(function () { Data.refresh(); fetchNews(); });
+  loadApps(function () { Data.refresh(); });
   Data.onChange(renderWeather);
 
   window.addEventListener('resize', fit);
   window.addEventListener('appcontrol', function () { closeAll(); back(); loadApps(); });
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) loadApps(function () { Data.refresh(); });
+    liveRect = null;
     placeLive();
   });
   setInterval(function () { renderWeather(); Data.refresh(); }, 30000);
-  setInterval(fetchNews, 15 * 60000);
 
   window.Hub = {state: st, move: move, activate: activate, back: back};
 })();

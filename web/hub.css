@@ -56,49 +56,37 @@ body {
   top: 0;
   width: 1824px;
   height: 2000px;
-  -webkit-transition: -webkit-transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 #hole { position: absolute; z-index: 0; box-shadow: 0 0 0 4000px #0D0E11; border-radius: 6px; }
 #main > .part { position: absolute; left: 0; z-index: 1; }
 
-/* MARK: - Banner: the newest regional story, its photo on the right and the text over the dark left */
+/* MARK: - Banner: the city's weather over a photo of it, where Samsung sells a slot */
 
 #hero { top: 0; width: 1824px; height: 460px; overflow: hidden; background: #15171C; }
-#hero.focus::after { content: ''; position: absolute; left: 0; top: 0; right: 0; bottom: 0; box-shadow: inset 0 0 0 4px #FFF; }
-#hero .glow { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: #15171C; }
-#hero .photo {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 1180px;
-  height: 460px;
-  background-size: cover;
-  background-position: center 30%;
-}
+#hero .photo { position: absolute; right: 0; top: 0; width: 1180px; height: 460px; background: url('icons/araxa.jpg') center 40% / cover no-repeat; }
 #hero .shade {
   position: absolute;
   left: 0;
   top: 0;
   width: 100%;
   height: 100%;
-  background: -webkit-linear-gradient(left, #15171C 0%, #15171C 36%, rgba(21, 23, 28, 0.6) 52%, rgba(21, 23, 28, 0) 72%);
-  background: linear-gradient(90deg, #15171C 0%, #15171C 36%, rgba(21, 23, 28, 0.6) 52%, rgba(21, 23, 28, 0) 72%);
+  background: -webkit-linear-gradient(left, #15171C 0%, #15171C 35%, rgba(21, 23, 28, 0.55) 55%, rgba(21, 23, 28, 0) 75%);
+  background: linear-gradient(90deg, #15171C 0%, #15171C 35%, rgba(21, 23, 28, 0.55) 55%, rgba(21, 23, 28, 0) 75%);
 }
-#hero .story { position: absolute; left: 72px; top: 118px; width: 760px; -webkit-transition: opacity 0.4s; transition: opacity 0.4s; }
-#hero .story.out { opacity: 0; }
-#hero .kicker { font-size: 22px; font-weight: 600; color: rgba(255, 255, 255, 0.72); }
-#hero .headline { margin-top: 16px; font-size: 46px; font-weight: 700; line-height: 1.16; max-height: 160px; overflow: hidden; }
-#hero .when { margin-top: 18px; font-size: 20px; color: rgba(255, 255, 255, 0.6); }
-#hero .dots { position: absolute; left: 72px; top: 404px; height: 8px; }
-#hero .dot { display: inline-block; width: 8px; height: 8px; margin-right: 10px; border-radius: 4px; background: rgba(255, 255, 255, 0.3); }
-#hero .dot.on { background: #FFF; }
-
-/* Time and weather at the top left, small, where Samsung puts its clock. */
-#hero .weather { position: absolute; left: 72px; top: 40px; white-space: nowrap; font-size: 22px; font-weight: 600; color: rgba(255, 255, 255, 0.85); }
-#hero .weather > div { display: inline-block; vertical-align: middle; margin-right: 22px; }
-#hero .temp .sym { width: 26px; height: 26px; margin-right: 8px; vertical-align: -5px; }
-#hero .range { color: rgba(255, 255, 255, 0.55); font-weight: 500; }
+#hero .clock { position: absolute; left: 72px; top: 40px; font-size: 22px; font-weight: 600; color: rgba(255, 255, 255, 0.8); white-space: nowrap; }
+#hero .city { position: absolute; left: 72px; top: 104px; font-size: 30px; font-weight: 700; }
+#hero .temp { position: absolute; left: 66px; top: 146px; font-size: 112px; font-weight: 300; line-height: 1; letter-spacing: -0.03em; white-space: nowrap; }
+#hero .temp .sym { width: 72px; height: 72px; margin-right: 16px; vertical-align: 8px; }
+#hero .cond { position: absolute; left: 72px; top: 270px; font-size: 24px; font-weight: 600; color: rgba(255, 255, 255, 0.8); white-space: pre; }
+#hero .hours, #hero .days { position: absolute; top: 330px; height: 100px; white-space: nowrap; }
+#hero .hours { left: 72px; }
+#hero .days { left: 690px; padding-left: 40px; border-left: 1px solid rgba(255, 255, 255, 0.18); }
+#hero .slot { display: inline-block; width: 96px; text-align: center; vertical-align: top; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6); }
+#hero .days .slot { width: 112px; }
+#hero .slot .at { font-size: 18px; color: rgba(255, 255, 255, 0.7); }
+#hero .slot .sym { width: 32px; height: 32px; margin: 10px 0 8px; }
+#hero .slot .deg { font-size: 20px; font-weight: 600; }
+#hero .credit { position: absolute; right: 20px; bottom: 12px; font-size: 13px; color: rgba(255, 255, 255, 0.55); }
 
 /* MARK: - Rows */
 
@@ -106,17 +94,17 @@ body {
 .strip {
   position: absolute;
   left: 72px;
-  -webkit-transition: -webkit-transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
-  transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  -webkit-transition: -webkit-transform 0.12s ease-out;
+  transition: transform 0.12s ease-out;
 }
 .strip > div {
   position: absolute;
   top: 0;
-  -webkit-transition: -webkit-transform 0.14s ease-out;
-  transition: transform 0.14s ease-out;
+  -webkit-transition: -webkit-transform 0.08s ease-out;
+  transition: transform 0.08s ease-out;
 }
 .strip > div.focus { -webkit-transform: scale(1.06); transform: scale(1.06); z-index: 2; }
-.app.focus, .focus > .face, .focus > .pic, .focus > .ring, .story-card.text.focus, .screen.focus > .art { box-shadow: 0 0 0 3px #FFF, 0 14px 30px rgba(0, 0, 0, 0.6); }
+.app.focus, .focus > .face, .focus > .pic, .focus > .ring, .story-card.text.focus, .screen.focus > .art { box-shadow: 0 0 0 3px #FFF; }
 
 /* The apps bar: logo tiles side by side, close together. */
 #apps { top: 488px; width: 1824px; height: 150px; }
@@ -168,18 +156,6 @@ body {
 .source { width: 225px; height: 280px; }
 .source .ring { position: absolute; left: 0; top: 0; width: 225px; height: 225px; border-radius: 8px; background: #23262D; }
 .source .ring .sym { position: absolute; left: 84px; top: 84px; width: 56px; height: 56px; color: #C9CCD2; }
-
-/* News: a photo with the headline under it, as Samsung's "Now" row; stories without a photo are text tiles. */
-#news { top: 1010px; width: 1824px; height: 360px; }
-#news .strip { top: 44px; }
-.story-card { width: 360px; height: 300px; }
-.story-card .pic { position: absolute; left: 0; top: 0; width: 360px; height: 203px; border-radius: 8px; background-color: #23262D; background-size: cover; background-position: center; }
-.story-card .from { position: absolute; left: 0; right: 0; top: 215px; font-size: 17px; color: rgba(255, 255, 255, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.story-card .headline { position: absolute; left: 0; right: 0; top: 240px; font-size: 21px; font-weight: 600; line-height: 1.25; max-height: 54px; overflow: hidden; }
-.story-card.text { height: 203px; border-radius: 8px; background: #23262D; }
-.story-card.text .from { left: 20px; right: 20px; top: 20px; }
-.story-card.text .headline { left: 20px; right: 20px; top: 50px; font-size: 24px; max-height: 120px; }
-.empty { position: absolute; left: 72px; top: 44px; font-size: 22px; color: rgba(255, 255, 255, 0.55); }
 
 /* MARK: - All apps */
 
