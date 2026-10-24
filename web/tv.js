@@ -153,6 +153,7 @@ var TV = (function () {
   var SAMSUNG_VIEWER = 'org.tizen.tv-viewer';
 
   var SAMPLE = [
+    ['org.tizen.samsungtvplus', 'Samsung TV Plus', '#1F4BD8'],
     ['netflix', 'Netflix', '#E50914'], ['youtube.leanback.v4', 'YouTube', '#FF0033'], ['amazon', 'Prime Video', '#1A98FF'],
     ['com.disney.disneyplus-prod', 'Disney+', '#1838C8'], ['com.hbo.hbomax', 'Max', '#6C3BE0'],
     ['com.apple.appletv', 'Apple TV', '#B8BCC6'], ['globoplaywebos', 'Globoplay', '#FF5A1F'], ['spotify-beehive', 'Spotify', '#1DB954'],
