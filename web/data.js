@@ -533,6 +533,7 @@ var Data = (function () {
     setApps: function (apps) { installed = apps; },
     appFor: appFor,
     refresh: function () { refreshWeather(); refreshPrices(); refreshRecs(); },
+    refreshWeather: refreshWeather,
     settingsChanged: function () { pricesAt = 0; refreshPrices(); changed(); },
     get weather() { return weather; },
     get weatherAt() { return weatherAt; },

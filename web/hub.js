@@ -1,6 +1,7 @@
 /*
  * Smart Hub: Samsung's home layout, without the ads. The rail on the left, the banner (the city's weather over a
- * photo of it), the apps bar, and recently watched with live TV's own picture (tizen.tvwindow).
+ * photo of it, or what's popular on the focused app), the apps bar, and recently watched with live TV's own picture
+ * (tizen.tvwindow).
  * ES5, for the Chromium of older TVs.
  */
 (function () {
@@ -105,9 +106,10 @@
 
   // MARK: - Rows
 
-  // Each row: its cards (DOM) and what OK does with each. Row 0 is the banner, which takes no focus.
+  // Each row: its cards (DOM) and what OK does with each. Row 0 is the banner's tips, when it shows some.
   var rows = [];
   var st = {rail: false, railAt: 0, row: 1, col: [0, 0, 0], all: false, allAt: 0};
+  rows[0] = [];
   
 
   function layStrip(strip, nodes, gap) {
@@ -232,6 +234,125 @@
     }
   }
 
+  // MARK: - Tips: what's popular on the focused app, in the banner, as Samsung's apps bar previews do
+
+  var TIPS_KEY = 'fmtv.tips', TIPS_FOR = 6 * 3600000, tips = {};
+  try { tips = JSON.parse(localStorage.getItem(TIPS_KEY)) || {}; } catch (e) {}
+  var PROVIDERS = {netflix: 8, disney: 337};
+  var TIPS_TITLE = {netflix: 'Em alta na Netflix', disney: 'Em alta no Disney+', youtube: 'Populares no YouTube'};
+  var tipsShown = '', tipsApp = null, tipsTimer = null;
+
+  function tipsKind(app) {
+    if (!app || !app.id) return '';
+    if (/netflix/i.test(app.title)) return 'netflix';
+    if (/disney/i.test(app.title)) return 'disney';
+    if (/^youtube$/i.test(app.title)) return 'youtube';
+    return '';
+  }
+
+  function getJSON(url, headers, done) {
+    var x = new XMLHttpRequest();
+    x.open('GET', url);
+    for (var h in headers) x.setRequestHeader(h, headers[h]);
+    x.timeout = 15000;
+    x.onload = function () { var o = null; try { if (x.status === 200) o = JSON.parse(x.responseText); } catch (e) {} done(o); };
+    x.onerror = x.ontimeout = function () { done(null); };
+    x.send();
+  }
+
+  function tmdbGet(path, done) {
+    var key = (CONFIG.tmdbKey || '').replace(/^\s+|\s+$/g, ''), bearer = key.indexOf('eyJ') === 0;
+    getJSON('https://api.themoviedb.org/3' + path + (bearer ? '' : '&api_key=' + encodeURIComponent(key)),
+      bearer ? {Authorization: 'Bearer ' + key} : {}, done);
+  }
+
+  function saveTips(kind, list) {
+    tips[kind] = {at: Date.now(), list: list};
+    try { localStorage.setItem(TIPS_KEY, JSON.stringify(tips)); } catch (e) {}
+    if (tipsShown === kind) { tipsShown = ''; showTips(kind); }
+  }
+
+  /** Netflix and Disney+: the most popular movies and shows on them here (TMDB); YouTube: its most popular videos. */
+  function fetchTips(kind) {
+    if (tips[kind] && Date.now() - tips[kind].at < TIPS_FOR) return;
+    if (kind === 'youtube') {
+      if (!CONFIG.youtubeKey) return;
+      getJSON('https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=12&regionCode='
+        + Place.country + '&key=' + encodeURIComponent(CONFIG.youtubeKey), {}, function (o) {
+        if (!o || !o.items) return;
+        saveTips(kind, o.items.map(function (v) {
+          var t = v.snippet.thumbnails;
+          return {title: v.snippet.title, sub: v.snippet.channelTitle, img: (t.high || t.medium || t['default']).url, video: v.id};
+        }));
+      });
+      return;
+    }
+    if (!CONFIG.tmdbKey || !PROVIDERS[kind]) return;
+    var q = '?language=pt-BR&watch_region=' + Place.country + '&with_watch_providers=' + PROVIDERS[kind]
+      + '&with_watch_monetization_types=flatrate&sort_by=popularity.desc';
+    tmdbGet('/discover/movie' + q, function (m) {
+      tmdbGet('/discover/tv' + q, function (t) {
+        var a = (m && m.results) || [], b = (t && t.results) || [], out = [];
+        for (var i = 0; i < 12 && out.length < 12; i++) {
+          if (b[i] && b[i].backdrop_path) out.push({title: b[i].name, sub: 'Série', img: 'https://image.tmdb.org/t/p/w500' + b[i].backdrop_path});
+          if (a[i] && a[i].backdrop_path) out.push({title: a[i].title, sub: 'Filme', img: 'https://image.tmdb.org/t/p/w500' + a[i].backdrop_path});
+        }
+        if (out.length) saveTips(kind, out);
+      });
+    });
+  }
+
+  /** The banner shows the focused app's tips (kind), or the weather (''). */
+  function showTips(kind) {
+    var list = kind && tips[kind] ? tips[kind].list : [];
+    if (!list.length) kind = '';
+    if (kind === tipsShown) return;
+    tipsShown = kind;
+    var box = hero.querySelector('.tips'), strip = box.querySelector('.strip');
+    strip.innerHTML = '';
+    var items = [];
+    for (var i = 0; i < list.length; i++) {
+      (function (t) {
+        var c = el('div', 'tip', strip);
+        el('div', 'pic', c).style.backgroundImage = 'url("' + t.img + '")';
+        el('div', 'caption', c, t.title);
+        el('div', 'when', c, t.sub);
+        items.push({node: c, ok: function () { openTip(t); }});
+      })(list[i]);
+    }
+    box.querySelector('.title').textContent = kind ? TIPS_TITLE[kind] : '';
+    layStrip(strip, items.map(function (x) { return x.node; }), 20);
+    strip.style.webkitTransform = strip.style.transform = '';
+    rows[0] = items;
+    st.col[0] = 0;
+    setClass(hero, 'tips-on', !!kind);
+  }
+
+  function openTip(t) {
+    var app = tipsApp;
+    if (!app) return;
+    if (t.video && window.tizen) {
+      try {
+        remember(app.id);
+        var data = [new window.tizen.ApplicationControlData('PAYLOAD', ['{"values": "v=' + t.video + '"}'])];
+        var c = new window.tizen.ApplicationControl('http://tizen.org/appcontrol/operation/view', null, null, null, data);
+        window.tizen.application.launchAppControl(c, app.id, null, function () { launch(app.id); });
+        return;
+      } catch (e) {}
+    }
+    launch(app.id);
+  }
+
+  /** Follows the apps bar's focus, a moment later, so moving along the bar stays instant. */
+  function followTips() {
+    if (st.row === 0 && !st.rail && !st.all) return;
+    var app = !st.rail && !st.all && st.row === 1 ? bar[st.col[1] - 2] : null;
+    var kind = tipsKind(app);
+    clearTimeout(tipsTimer);
+    if (kind === tipsShown) { tipsApp = app || tipsApp; return; }
+    tipsTimer = setTimeout(function () { tipsApp = app; showTips(kind); focus(); }, kind ? 180 : 0);
+  }
+
   // MARK: - Live picture
 
   var liveShown = false, liveRect = '';
@@ -306,7 +427,7 @@
     var r, i;
     var railItems = $('rail').children;
     for (i = 0; i < railItems.length; i++) setClass(railItems[i], 'focus', st.rail && st.railAt === i && !st.all);
-    for (r = 1; r < rows.length; r++) {
+    for (r = 0; r < rows.length; r++) {
       var items = rows[r] || [];
       st.col[r] = Math.max(0, Math.min(st.col[r], items.length - 1));
       for (i = 0; i < items.length; i++) setClass(items[i].node, 'focus', !st.rail && !st.all && st.row === r && st.col[r] === i);
@@ -314,6 +435,7 @@
     }
     if (st.all) focusAll();
     placeLive();
+    followTips();
   }
 
   function rowHasItems(r) { return rows[r] && rows[r].length > 0; }
@@ -332,8 +454,8 @@
     }
     if (dy) {
       var next = st.row + dy;
-      while (next >= 1 && next < 3 && !rowHasItems(next)) next += dy;
-      if (next >= 1 && next < 3) st.row = next;
+      while (next >= 0 && next < 3 && !rowHasItems(next)) next += dy;
+      if (next >= 0 && next < 3) st.row = next;
     }
     focus();
   }
@@ -459,17 +581,20 @@
   renderRail();
   renderWeather();
   fit();
-  loadApps(function () { Data.refresh(); });
+  loadApps(function () {
+    Data.refreshWeather();
+    for (var i = 0; i < bar.length; i++) if (tipsKind(bar[i])) fetchTips(tipsKind(bar[i]));
+  });
   Data.onChange(renderWeather);
 
   window.addEventListener('resize', fit);
   window.addEventListener('appcontrol', function () { closeAll(); back(); loadApps(); });
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) loadApps(function () { Data.refresh(); });
+    if (!document.hidden) loadApps(function () { Data.refreshWeather(); });
     liveRect = null;
     placeLive();
   });
-  setInterval(function () { renderWeather(); Data.refresh(); }, 30000);
+  setInterval(function () { renderWeather(); Data.refreshWeather(); }, 30000);
 
   window.Hub = {state: st, move: move, activate: activate, back: back};
 })();

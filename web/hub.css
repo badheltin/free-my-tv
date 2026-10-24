@@ -88,6 +88,15 @@ body {
 #hero .slot .deg { font-size: 20px; font-weight: 600; }
 #hero .credit { position: absolute; right: 20px; bottom: 12px; font-size: 13px; color: rgba(255, 255, 255, 0.55); }
 
+/* Tips for the focused app take the banner's place. */
+#hero .tips { position: absolute; left: 0; top: 0; width: 1824px; height: 460px; background: #15171C; visibility: hidden; }
+#hero.tips-on .tips { visibility: visible; }
+#hero .tips .title { top: 92px; }
+#hero .tips .strip { top: 140px; }
+.tip { width: 400px; height: 300px; }
+.tip .pic { position: absolute; left: 0; top: 0; width: 400px; height: 225px; border-radius: 8px; background-color: #23262D; background-size: cover; background-position: center; }
+.tip .when { position: absolute; left: 0; top: 266px; font-size: 18px; color: rgba(255, 255, 255, 0.55); }
+
 /* MARK: - Rows */
 
 .part .title { position: absolute; left: 72px; top: 0; font-size: 24px; font-weight: 600; white-space: nowrap; color: rgba(255, 255, 255, 0.92); }
@@ -104,7 +113,7 @@ body {
   transition: transform 0.08s ease-out;
 }
 .strip > div.focus { -webkit-transform: scale(1.06); transform: scale(1.06); z-index: 2; }
-.app.focus, .focus > .face, .focus > .pic, .focus > .ring, .story-card.text.focus, .screen.focus > .art { box-shadow: 0 0 0 3px #FFF; }
+.app.focus, .focus > .face, .tip.focus > .pic, .focus > .pic, .focus > .ring, .story-card.text.focus, .screen.focus > .art { box-shadow: 0 0 0 3px #FFF; }
 
 /* The apps bar: logo tiles side by side, close together. */
 #apps { top: 488px; width: 1824px; height: 150px; }
