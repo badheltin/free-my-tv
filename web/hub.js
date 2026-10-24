@@ -238,8 +238,8 @@
 
   var TIPS_KEY = 'fmtv.tips', TIPS_FOR = 6 * 3600000, tips = {};
   try { tips = JSON.parse(localStorage.getItem(TIPS_KEY)) || {}; } catch (e) {}
-  var PROVIDERS = {netflix: 8, disney: 337};
-  var TIPS_TITLE = {netflix: 'Em alta na Netflix', disney: 'Em alta no Disney+', youtube: 'Populares no YouTube'};
+  var PACKAGES = {netflix: 'nfx', disney: 'dnp'};
+  var TIPS_TITLE = {netflix: 'Em alta na Netflix', disney: 'Em alta no Disney+', youtube: 'Novos no YouTube'};
   var tipsShown = '', tipsApp = null, tipsTimer = null;
 
   function tipsKind(app) {
@@ -250,20 +250,14 @@
     return '';
   }
 
-  function getJSON(url, headers, done) {
+  function request(method, url, body, done) {
     var x = new XMLHttpRequest();
-    x.open('GET', url);
-    for (var h in headers) x.setRequestHeader(h, headers[h]);
+    x.open(method, url);
+    if (body) x.setRequestHeader('Content-Type', 'application/json');
     x.timeout = 15000;
-    x.onload = function () { var o = null; try { if (x.status === 200) o = JSON.parse(x.responseText); } catch (e) {} done(o); };
-    x.onerror = x.ontimeout = function () { done(null); };
-    x.send();
-  }
-
-  function tmdbGet(path, done) {
-    var key = (CONFIG.tmdbKey || '').replace(/^\s+|\s+$/g, ''), bearer = key.indexOf('eyJ') === 0;
-    getJSON('https://api.themoviedb.org/3' + path + (bearer ? '' : '&api_key=' + encodeURIComponent(key)),
-      bearer ? {Authorization: 'Bearer ' + key} : {}, done);
+    x.onload = function () { done(x.status === 200 ? x.responseText : ''); };
+    x.onerror = x.ontimeout = function () { done(''); };
+    x.send(body || null);
   }
 
   function saveTips(kind, list) {
@@ -272,34 +266,55 @@
     if (tipsShown === kind) { tipsShown = ''; showTips(kind); }
   }
 
-  /** Netflix and Disney+: the most popular movies and shows on them here (TMDB); YouTube: its most popular videos. */
+  var POPULAR = 'query($c:Country!,$l:Language!,$f:TitleFilter){popularTitles(country:$c,first:14,filter:$f){edges{node{'
+    + 'objectType content(country:$c,language:$l){title backdrops{backdropUrl}}}}}}';
+
+  /**
+   * Netflix and Disney+: what's popular on them in this country (JustWatch, no key). YouTube: the newest videos of
+   * youtube_channels (YouTube's own feeds, no key).
+   */
   function fetchTips(kind) {
     if (tips[kind] && Date.now() - tips[kind].at < TIPS_FOR) return;
-    if (kind === 'youtube') {
-      if (!CONFIG.youtubeKey) return;
-      getJSON('https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=12&regionCode='
-        + Place.country + '&key=' + encodeURIComponent(CONFIG.youtubeKey), {}, function (o) {
-        if (!o || !o.items) return;
-        saveTips(kind, o.items.map(function (v) {
-          var t = v.snippet.thumbnails;
-          return {title: v.snippet.title, sub: v.snippet.channelTitle, img: (t.high || t.medium || t['default']).url, video: v.id};
-        }));
-      });
-      return;
-    }
-    if (!CONFIG.tmdbKey || !PROVIDERS[kind]) return;
-    var q = '?language=pt-BR&watch_region=' + Place.country + '&with_watch_providers=' + PROVIDERS[kind]
-      + '&with_watch_monetization_types=flatrate&sort_by=popularity.desc';
-    tmdbGet('/discover/movie' + q, function (m) {
-      tmdbGet('/discover/tv' + q, function (t) {
-        var a = (m && m.results) || [], b = (t && t.results) || [], out = [];
-        for (var i = 0; i < 12 && out.length < 12; i++) {
-          if (b[i] && b[i].backdrop_path) out.push({title: b[i].name, sub: 'Série', img: 'https://image.tmdb.org/t/p/w500' + b[i].backdrop_path});
-          if (a[i] && a[i].backdrop_path) out.push({title: a[i].title, sub: 'Filme', img: 'https://image.tmdb.org/t/p/w500' + a[i].backdrop_path});
+    if (kind === 'youtube') { fetchVideos(); return; }
+    var body = JSON.stringify({query: POPULAR, variables: {c: Place.country, l: 'pt', f: {packages: [PACKAGES[kind]]}}});
+    request('POST', 'https://apis.justwatch.com/graphql', body, function (text) {
+      var edges = [];
+      try { edges = JSON.parse(text).data.popularTitles.edges; } catch (e) { return; }
+      var out = [];
+      for (var i = 0; i < edges.length && out.length < 12; i++) {
+        var n = edges[i].node, c = n.content, b = c && c.backdrops && c.backdrops[0];
+        if (!b) continue;
+        out.push({title: c.title, sub: n.objectType === 'MOVIE' ? 'Filme' : 'Série',
+          img: 'https://images.justwatch.com' + b.backdropUrl.replace('{profile}', 's640').replace('{format}', 'jpg')});
+      }
+      if (out.length) saveTips(kind, out);
+    });
+  }
+
+  var CHANNELS = CONFIG.youtubeChannels && CONFIG.youtubeChannels.length ? CONFIG.youtubeChannels
+    : ['UCKHhA5hN2UohhFDfNXB_cvQ', 'UCV306eHqgo0LvBf3Mh36AHg', 'UCEWHPFNilsT0IfQfutVzsag'];
+
+  function fetchVideos() {
+    var all = [], left = CHANNELS.length;
+    CHANNELS.forEach(function (id) {
+      request('GET', 'https://www.youtube.com/feeds/videos.xml?channel_id=' + id, null, function (xml) {
+        if (xml) {
+          var doc = new DOMParser().parseFromString(xml, 'text/xml'), entries = doc.getElementsByTagName('entry');
+          for (var i = 0; i < entries.length && i < 6; i++) {
+            var text = tagText(entries[i]), video = text('yt:videoId');
+            all.push({title: text('title'), sub: text('name'), video: video, at: Date.parse(text('published')) || 0,
+              img: 'https://i.ytimg.com/vi/' + video + '/hqdefault.jpg'});
+          }
         }
-        if (out.length) saveTips(kind, out);
+        if (--left) return;
+        all.sort(function (a, b) { return b.at - a.at; });
+        if (all.length) saveTips('youtube', all.slice(0, 12));
       });
     });
+  }
+
+  function tagText(node) {
+    return function (tag) { var n = node.getElementsByTagName(tag)[0]; return n ? n.textContent : ''; };
   }
 
   /** The banner shows the focused app's tips (kind), or the weather (''). */

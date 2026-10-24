@@ -15,7 +15,7 @@ import translate  # noqa: E402  (the catalogues and the keys the web app uses)
 
 GENERIC = {'tmdbKey': '', 'tmdbRegion': '', 'latitude': '', 'longitude': '', 'city': '', 'language': 'auto',
            'currency': '', 'temperature': 'auto', 'theme': 'auto', 'showCrypto': True, 'hideAnimation': False, 'hideApps': [],
-           'shelfApps': [], 'youtubeKey': ''}
+           'shelfApps': [], 'youtubeChannels': []}
 
 
 def config_from_args(args):
@@ -61,7 +61,7 @@ def read_config(path):
         'hideAnimation': values.get('hide_animation', 'false').lower() == 'true',
         'hideApps': [s.strip() for s in values.get('hide_apps', '').split(',') if s.strip()],
         'shelfApps': [s.strip() for s in values.get('shelf_apps', '').split(',') if s.strip()],
-        'youtubeKey': values.get('youtube_key', ''),
+        'youtubeChannels': [s.strip() for s in values.get('youtube_channels', '').split(',') if s.strip()],
     }
 
 
